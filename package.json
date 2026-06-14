@@ -1,0 +1,9 @@
+{
+  "name": "lumina-cast",
+  "version": "1.0.0",
+  "description": "Lúmina Cast — Podcast Multiplayer com áudio WebRTC",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}
