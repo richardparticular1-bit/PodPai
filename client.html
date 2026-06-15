@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PODPAI">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#cc44ff">
+<meta name="description" content="Podcast social multiplayer com áudio em tempo real">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <title>PODPAI CAST</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap');
@@ -1127,9 +1133,15 @@ async function startGame(){
   window.addEventListener('beforeunload',()=>wsSend({type:'leave'}));
 }
 resize();
-</script>
-</body>
-</html>
 
+// ── PWA: registra service worker ─────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js')
+      .then(()=>console.log('SW ok'))
+      .catch(e=>console.log('SW err',e));
+  });
+}
+</script>
 </body>
 </html>
