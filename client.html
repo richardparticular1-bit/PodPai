@@ -112,7 +112,7 @@ body.listener #bottom{display:none;}
 .rb.dis{opacity:.35;}
 
 /* FULLSCREEN OVERLAY */
-#fsov{display:none;position:fixed;inset:0;z-index:100;pointer-events:none;}
+#fsov{display:none;position:fixed;inset:0;z-index:100;pointer-events:none;isolation:isolate;}
 body.fsmode #fsov{display:block;}
 body.fsmode #shell{position:fixed;inset:0;}
 
@@ -130,7 +130,7 @@ body.fsmode #shell{position:fixed;inset:0;}
 .fsspk{background:#00000077;border:1px solid #44dd4455;border-radius:12px;padding:2px 8px;font-size:9px;font-weight:800;color:#aaffcc;display:flex;align-items:center;gap:3px;backdrop-filter:blur(3px);}
 
 /* fs right panel */
-#fs-right{position:absolute;top:0;bottom:0;right:0;width:148px;background:#12082aee;border-left:1px solid #2a1a5066;display:flex;flex-direction:column;overflow:hidden;pointer-events:all;backdrop-filter:blur(6px);transform:translateX(100%);transition:transform .25s;}
+#fs-right{position:absolute;top:0;bottom:0;right:0;width:148px;background:#12082aee;border-left:1px solid #2a1a5066;display:flex;flex-direction:column;overflow:hidden;pointer-events:all;backdrop-filter:blur(6px);transform:translateX(100%);transition:transform .25s;z-index:110;-webkit-overflow-scrolling:touch;}
 #fs-right.open{transform:translateX(0);}
 #fs-toggle{position:absolute;top:50%;transform:translateY(-50%);width:20px;height:40px;background:#12082a99;border:1px solid #2a1a50;border-right:none;border-radius:6px 0 0 6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#cc88ff;cursor:pointer;pointer-events:all;right:148px;transition:right .25s;}
 #fs-right.open~#fs-toggle{right:148px;}
@@ -143,7 +143,7 @@ body.fsmode #shell{position:fixed;inset:0;}
 #fs-cmsgs{flex:1;overflow-y:auto;padding:4px 7px;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;min-height:0;}
 #fs-cmsgs::-webkit-scrollbar{width:2px;}#fs-cmsgs::-webkit-scrollbar-thumb{background:#cc44ff44;}
 #fs-cinrow{display:flex;padding:4px 6px 8px;border-top:1px solid #2a1a5066;gap:0;flex-shrink:0;}
-#fs-cin{flex:1;background:#ffffff0e;border:1px solid #cc44ff33;border-right:none;border-radius:9px 0 0 9px;color:#fff;font-family:'Nunito',sans-serif;font-size:10px;font-weight:700;padding:4px 7px;outline:none;-webkit-appearance:none;}
+#fs-cin{flex:1;background:#ffffff0e;border:1px solid #cc44ff33;border-right:none;border-radius:9px 0 0 9px;color:#fff;font-family:'Nunito',sans-serif;font-size:16px;font-weight:700;padding:4px 7px;outline:none;-webkit-appearance:none;touch-action:manipulation;user-select:text;-webkit-user-select:text;}
 #fs-cin:focus{border-color:#cc44ff;}
 #fs-bsend{background:#cc44ff;border:none;border-radius:0 9px 9px 0;padding:4px 7px;color:#fff;font-size:12px;cursor:pointer;}
 
@@ -330,7 +330,7 @@ body.fsmode #shell{position:fixed;inset:0;}
       <div id="fs-ctbar">Chat da Sala</div>
       <div id="fs-cmsgs"></div>
       <div id="fs-cinrow">
-        <input id="fs-cin" type="text" maxlength="80" placeholder="Digite..." autocomplete="off" autocorrect="off">
+        <input id="fs-cin" type="text" maxlength="80" placeholder="Digite..." autocomplete="off" autocorrect="off" autocapitalize="off" readonly>
         <button id="fs-bsend">➤</button>
       </div>
     </div>
@@ -527,7 +527,7 @@ async function makePeer(pid){
   peers[pid]=pc;
   const initiator=shouldInitiate(pid);
 
-  // Adiciona stream local se tiver
+  // Adiciona stream local apenas se for participante com mic
   if(localStream&&entryMode==='part'){
     localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
   }
@@ -685,8 +685,8 @@ async function onMsg(msg){
   if(msg.type==='room_state'){
     for(const p of msg.players){
       players[p.id]={...p};
-      // Criamos peer — quem tem ID maior vai iniciar via onnegotiationneeded
-      if(entryMode==='part'&&!p.listener) await makePeer(p.id);
+      // Ouvinte também cria peers para RECEBER áudio, só não envia stream
+      if(!p.listener) await makePeer(p.id);
     }
     updParts();
   }
@@ -694,7 +694,8 @@ async function onMsg(msg){
     players[msg.from]={id:msg.from,name:msg.name,avatar:msg.avatar,color:msg.color,wx:msg.wx||0,wy:msg.wy||0,moved:false,listener:msg.listener};
     addChat(null,`${msg.name} ${msg.listener?'está ouvindo 👁️':'entrou na sala! 🎙️'}`,'sys');
     updParts();playSound('join');
-    if(entryMode==='part'&&!msg.listener) await makePeer(msg.from);
+    // Ouvinte também cria peer com participantes para receber áudio
+    if(!msg.listener) await makePeer(msg.from);
   }
   else if(msg.type==='move'){
     if(players[msg.from])Object.assign(players[msg.from],{wx:msg.wx,wy:msg.wy,moved:true});
@@ -883,7 +884,10 @@ function render(ts){
   if(!running)return;animT=ts;resize();
   ctx.clearRect(0,0,CW,CH);
   drawRoom();drawChairs();
-  Object.values(players).forEach(p=>{const{sx,sy}=ppos(p);drawPlayer(p,sx,sy,p.id===myId);});
+  Object.values(players).forEach(p=>{
+    if(p.listener)return; // ouvintes não aparecem no canvas
+    const{sx,sy}=ppos(p);drawPlayer(p,sx,sy,p.id===myId);
+  });
   drawBubbles(ts);drawEffects(ts);
   requestAnimationFrame(render);
 }
@@ -1066,6 +1070,25 @@ document.getElementById('bsend').onclick=()=>sendChat('cin');
 document.getElementById('cin').addEventListener('keydown',e=>{if(e.key==='Enter'){sendChat('cin');e.preventDefault();}});
 document.getElementById('fs-bsend').onclick=()=>sendChat('fs-cin');
 document.getElementById('fs-cin').addEventListener('keydown',e=>{if(e.key==='Enter'){sendChat('fs-cin');e.preventDefault();}});
+
+// Fix mobile fullscreen teclado — força foco com timeout após toque
+document.getElementById('fs-cin').addEventListener('touchend', e=>{
+  e.preventDefault();
+  const inp = document.getElementById('fs-cin');
+  // Pequeno delay necessário no Android/iOS em fullscreen
+  setTimeout(()=>{
+    inp.focus();
+    // iOS workaround: readonly trick
+    inp.removeAttribute('readonly');
+  }, 100);
+}, {passive:false});
+
+// Também no cinrow inteiro para área maior de toque
+document.getElementById('fs-cinrow').addEventListener('touchend', e=>{
+  if(e.target === document.getElementById('fs-bsend')) return;
+  e.preventDefault();
+  setTimeout(()=>{ document.getElementById('fs-cin').focus(); }, 100);
+}, {passive:false});
 document.getElementById('btn-mic').onclick=toggleMic;
 
 // ── LOGIN ────────────────────────────────────────────────────
@@ -1105,5 +1128,8 @@ async function startGame(){
 }
 resize();
 </script>
+</body>
+</html>
+
 </body>
 </html>
