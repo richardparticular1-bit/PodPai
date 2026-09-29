@@ -254,6 +254,20 @@ input{user-select:text!important;-webkit-user-select:text!important}
 .prav{overflow:hidden}.prav img{width:30px;height:38px;object-fit:contain;transform:translateY(3px)}
 #lov{align-content:safe center}.lb{flex-shrink:0}
 @media(max-width:760px){.avo{min-height:94px}.avo img{width:54px;height:69px}}
+/* Keep room activity compact so conversation gets the remaining height. */
+#pwrap{padding:14px 16px;max-height:32%;min-height:86px;display:flex;flex-direction:column}
+#ptitle{margin-bottom:8px;padding-right:22px}
+#plist{min-height:0;overflow-y:auto;touch-action:pan-y}
+#lcount{flex-shrink:0;margin-top:6px}
+#ewrap{padding:10px 14px}
+#etitle{margin-bottom:6px;font-size:9px}
+#ecard{display:grid;grid-template-columns:24px minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px;text-align:left;border-radius:10px}
+#eicon{grid-column:1;grid-row:1;font-size:20px;margin:0;text-align:center}
+#ename{grid-column:2;grid-row:1;font-size:12px;line-height:1.35;margin:0;overflow-wrap:anywhere}
+#etimer{grid-column:3;grid-row:1;font-size:11px;margin:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+#edesc{display:none}
+#ctbar{padding:12px 16px}
+#cmsgs{padding:12px 16px}
 </style>
 </head>
 <body>
