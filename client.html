@@ -268,10 +268,50 @@ input{user-select:text!important;-webkit-user-select:text!important}
 #edesc{display:none}
 #ctbar{padding:12px 16px}
 #cmsgs{padding:12px 16px}
+#ctbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#btn-chat-expand{border:1px solid #bca0ff44;background:#302440;color:#eadbff;border-radius:8px;padding:7px 10px;min-height:34px;font-size:11px}
+#rpanel.chat-expanded{position:absolute;inset:0;width:100%;z-index:40;border:0;background:#171329}
+#main{position:relative}
+#rpanel.chat-expanded #pwrap,#rpanel.chat-expanded #ewrap,#rpanel.chat-expanded #btn-rclose{display:none}
+#rpanel.chat-expanded #ctbar{padding:16px 24px;font-size:13px}
+#rpanel.chat-expanded #cmsgs{padding:20px 24px;gap:16px}
+#rpanel.chat-expanded .cm{font-size:17px;line-height:1.65}
+#rpanel.chat-expanded #cinrow{padding:16px 24px}
+@media(max-width:760px){#rpanel.chat-expanded #cmsgs{padding:16px}#rpanel.chat-expanded #cinrow{padding:12px}#rpanel.chat-expanded .cm{font-size:16px}}
+.admin-tools{display:none;gap:6px;flex-shrink:0}.admin-tools button{font-size:10px;min-height:32px;padding:5px;border:1px solid #b69bd444;border-radius:6px;background:#30243c;color:#eee}
+body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:100%;justify-content:flex-end}
+#recording-notice{display:none;flex-shrink:0;padding:8px 14px;border:1px solid #ef8f9d55;background:#46202d;color:#ffd6df;border-radius:10px;font-size:12px}
+#recording-notice.active{display:block}
+.studio-dialog{margin:auto;width:min(480px,92vw);max-height:85dvh;overflow:auto;border:1px solid #be9ddb55;border-radius:18px;background:#21192f;color:#eee;padding:24px;box-shadow:0 24px 80px #0008}
+.studio-dialog::backdrop{background:#080512bb}.studio-dialog h2{font-size:20px;margin-bottom:12px}.studio-dialog p{font-size:13px;line-height:1.6;color:#cabcda;margin:10px 0}
+.studio-dialog label{display:block;font-size:13px;margin:12px 0 6px}.studio-dialog input,.studio-dialog select{width:100%;padding:12px;background:#130f20;color:#fff;border:1px solid #b69ad555;border-radius:8px;font-size:16px}
+.studio-dialog button,.studio-dialog a{display:inline-block;min-height:40px;padding:10px 14px;margin-top:12px;border:1px solid #b9a0db55;border-radius:8px;background:#49335f;color:white;font-size:13px}
+.studio-dialog .dialog-close{float:right;margin:0;background:transparent}.admin-error{color:#ffb8c7!important}#record-downloads a{display:block;overflow-wrap:anywhere}
+@media(max-width:760px){#topbar-right{flex-wrap:wrap}#recording-notice{font-size:11px}}
+#jzone{display:none!important}
+#replay-list{display:grid;gap:8px}#record-downloads>div{padding:12px;border:1px solid #49335d;border-radius:12px;margin:10px 0}#record-downloads a{display:inline-block;margin:8px}#replay-list button{text-align:left}
+[hidden]{display:none!important}
+.seat-status{color:#a2d9be;flex-basis:100%;padding-left:43px;font-size:10px}
 </style>
 </head>
 <body>
 <div id="toast" role="status" aria-live="polite"></div>
+<dialog id="admin-dialog" class="studio-dialog" aria-labelledby="admin-title">
+  <button type="button" class="dialog-close" onclick="document.getElementById('admin-dialog').close()" aria-label="Fechar administração">✕</button>
+  <h2 id="admin-title">Administrar sala</h2>
+  <form id="admin-login"><label for="admin-password">Senha de administrador</label><input id="admin-password" type="password" autocomplete="current-password" required><button type="submit">Entrar como administrador</button></form>
+  <p id="admin-feedback" class="admin-error" role="status"></p>
+  <section id="record-controls" hidden>
+    <p>Use os controles ao lado de cada participante para silenciar, liberar o microfone ou remover da sessão.</p>
+    <label for="record-mode">Gravar episódio</label><select id="record-mode"><option value="audio">Áudio dos participantes</option><option value="video">Vídeo do estúdio + áudio</option></select>
+    <p>A sala será avisada. O vídeo do estúdio e o áudio recebido neste navegador serão enviados ao Supabase em partes de até 4 minutos. Mantenha esta aba aberta e visível até concluir os envios.</p>
+    <button id="btn-record" type="button" onclick="toggleRecording()">● Iniciar gravação</button>
+    <p id="record-feedback" role="status"></p>
+  </section>
+  <div id="record-downloads" aria-live="polite"></div>
+  <section id="replay-controls" hidden><h3>Episódios gravados</h3><button type="button" onclick="loadReplays()">Atualizar replays</button><p id="replay-feedback" role="status"></p><div id="replay-list"></div><button id="replay-more" type="button" hidden>Carregar mais</button><video id="replay-player" controls playsinline hidden style="width:100%;margin-top:16px"></video></section>
+</dialog>
+<dialog id="remove-dialog" class="studio-dialog" aria-labelledby="remove-title"><h2 id="remove-title">Remover participante?</h2><p id="remove-description"></p><button type="button" onclick="confirmRemoval()">Remover da sessão</button> <button type="button" onclick="document.getElementById('remove-dialog').close()">Cancelar</button></dialog>
 
 <!-- SHARE MODAL -->
 <div id="sharemod">
@@ -322,13 +362,15 @@ input{user-select:text!important;-webkit-user-select:text!important}
       <button id="btn-share" onclick="openShare()">🔗 Convidar</button>
       <button id="btn-fs" aria-label="Alternar tela cheia" onclick="toggleFS()">⛶</button>
       <button id="btn-mic">🔇 Mudo</button>
+      <button id="btn-admin" type="button" onclick="document.getElementById('admin-dialog').showModal()">Administrar</button>
     </div>
   </div>
 
+  <div id="recording-notice" role="status" aria-live="polite"></div>
   <div id="main">
     <!-- CANVAS -->
     <div id="center">
-      <canvas id="gc" aria-label="Estúdio virtual com os avatares dos participantes"></canvas><div class="room-hint">Mover: WASD ou setas · Reagir: 1–5</div>
+      <canvas id="gc" aria-label="Estúdio virtual com os avatares dos participantes"></canvas><div class="room-hint">Poltronas sincronizadas · Reagir: 1–5</div>
       <div id="ainds"></div>
       <div id="listener-badge">👁️ Modo Ouvinte</div>
       <div id="jzone"><div id="jbase"><div id="jknob"></div></div></div>
@@ -353,7 +395,7 @@ input{user-select:text!important;-webkit-user-select:text!important}
         </div>
       </div>
       <div id="cwrap">
-        <div id="ctbar">Chat da Sala</div>
+        <div id="ctbar"><span>Chat da Sala</span><button id="btn-chat-expand" type="button" aria-expanded="false" onclick="expandChat()">⛶ Expandir</button></div>
         <div id="cmsgs"></div>
         <div id="cinrow">
           <input id="cin" aria-label="Mensagem para a sala" type="text" maxlength="80" placeholder="Digite..." autocomplete="off" autocorrect="off">
@@ -600,6 +642,7 @@ async function initMic(){
 }
 
 function toggleMic(){
+  if(players[myId]?.adminMuted){showToast('Seu microfone foi bloqueado pelo administrador.');return;}
   if(entryMode==='listen'){showToast('👁️ Ouvintes não podem falar');return;}
   if(!localStream){initMic().then(ok=>{if(ok)toggleMic();});return;}
   // AudioContext precisa ser criado/retomado em gesto do utilizador
@@ -716,6 +759,8 @@ function playAudio(pid,stream){
     document.body.appendChild(el);
   }
   el.srcObject=stream;
+  el.muted=!!players[pid]?.adminMuted;
+  recordingAttach(pid,stream);
   // Força play (iOS)
   el.play().catch(()=>{});
 
@@ -730,6 +775,7 @@ function playAudio(pid,stream){
 }
 
 function cleanPeer(pid){
+  recordingDetach(pid);
   if(peers[pid]){try{peers[pid].close();}catch{} delete peers[pid];}
   const el=document.getElementById('aud-'+pid);if(el)el.remove();
   delete analysers[pid];delete speaking[pid];
@@ -743,7 +789,7 @@ setInterval(()=>{
     try{
       an.getByteFrequencyData(buf);
       const avg=buf.reduce((a,b)=>a+b,0)/buf.length;
-      const s=avg>8;
+      const s=avg>8&&!players[pid]?.adminMuted;
       if(s!==speaking[pid]){speaking[pid]=s;updSpeaking(pid,s);}
     }catch{}
   });
@@ -756,7 +802,7 @@ function updSpeaking(pid,s){
   const wrap=document.getElementById('ainds'),ex=document.getElementById('ai-'+pid),p=players[pid];
   if(s&&p&&!ex){
     const d=document.createElement('div');d.className='aind show';d.id='ai-'+pid;
-    d.innerHTML=`<span style="color:${p.color};font-weight:900;font-size:9px">${p.name}</span><div class="sw"><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div></div>`;
+    d.innerHTML=`<span style="color:${p.color};font-weight:900;font-size:9px">${esc(p.name)}</span><div class="sw"><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div></div>`;
     wrap.appendChild(d);
   }else if(!s&&ex)ex.remove();
 }
@@ -765,7 +811,7 @@ function updFsSpk(){
   const el=document.getElementById('fs-spk');if(!el)return;
   el.innerHTML=Object.values(players)
     .filter(p=>speaking[p.id]||(p.id===myId&&!isMuted))
-    .map(p=>`<div class="fsspk"><span style="color:${p.color};font-size:9px;font-weight:900">${p.name}</span><div class="sw"><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div></div></div>`)
+    .map(p=>`<div class="fsspk"><span style="color:${p.color};font-size:9px;font-weight:900">${esc(p.name)}</span><div class="sw"><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div><div class="swb" style="background:${p.color}"></div></div></div>`)
     .join('');
 }
 
@@ -787,7 +833,11 @@ function connectWS(url){
     let m;try{m=JSON.parse(e.data);}catch{return;}
     await onMsg(m);
   };
-  ws.onclose=()=>{
+  ws.onclose=e=>{
+    adminDisconnected();
+    Object.keys(peers).forEach(cleanPeer);
+    if(e.code===4003||removedFromRoom){document.getElementById('conn').textContent='● removido';return;}
+    if(e.code===1008){document.getElementById('conn').textContent='● sessão recusada';showToast('Recarregue para entrar novamente.');return;}
     document.getElementById('conn').textContent='● reconectando…';
     document.getElementById('conn').className='';
     showToast('⚠️ Reconectando...');
@@ -799,9 +849,19 @@ function connectWS(url){
 function wsSend(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify({...d,from:myId}));}
 
 async function onMsg(msg){
+  if(msg.type==='room_full'){
+    localStream?.getTracks().forEach(t=>t.stop());isMuted=true;updMicUI();
+    const notice=document.getElementById('recording-notice');notice.dataset.entryError='1';notice.classList.add('active');notice.textContent=msg.message+' ';
+    const listen=document.createElement('button');listen.type='button';listen.textContent='Entrar como ouvinte';listen.onclick=()=>{const url=new URL(location.href);url.searchParams.set('listen','1');location.href=url;};notice.appendChild(listen);
+    showToast(msg.message);return;
+  }
+  if(handleAdminMessage(msg))return;
   if(msg.from===myId)return;
 
   if(msg.type==='room_state'){
+    for(const id of Object.keys(players))if(id!==myId)delete players[id];
+    if(msg.self)Object.assign(players[myId],msg.self);
+    updateRecordingNotice(msg.recording||null);
     for(const p of msg.players){
       players[p.id]={...p};
       // Ouvinte também cria peers para RECEBER áudio, só não envia stream
@@ -810,7 +870,7 @@ async function onMsg(msg){
     updParts();
   }
   else if(msg.type==='join'){
-    players[msg.from]={id:msg.from,name:msg.name,avatar:msg.avatar,color:msg.color,wx:msg.wx||0,wy:msg.wy||0,moved:false,listener:msg.listener};
+    players[msg.from]={id:msg.from,name:msg.name,avatar:msg.avatar,color:msg.color,seat:msg.seat,wx:msg.wx||0,wy:msg.wy||0,moved:false,listener:msg.listener,isAdmin:!!msg.isAdmin,adminMuted:!!msg.adminMuted};
     addChat(null,`${msg.name} ${msg.listener?'está ouvindo 👁️':'entrou na sala! 🎙️'}`,'sys');
     updParts();playSound('join');
     // Ouvinte também cria peer com participantes para receber áudio
@@ -828,7 +888,7 @@ async function onMsg(msg){
   else if(msg.type==='skill'){
     const p=players[msg.from],c=CARDS[msg.cardId];
     if(p&&c){
-      effects.push({sx:msg.wx,sy:msg.wy,color:c.color,icon:c.icon,ts:animT});
+      effects.push({...ppos(p),color:c.color,icon:c.icon,ts:animT});
       addChat(null,`${p.name} ${c.msg}`,'sys');
       playSound(msg.cardId);
     }
@@ -836,7 +896,7 @@ async function onMsg(msg){
   else if(msg.type==='leave'){
     const p=players[msg.from];if(!p)return;
     addChat(null,`${p.name} saiu.`,'sys');
-    delete players[msg.from];delete usedChairs[msg.from];cleanPeer(msg.from);updParts();
+    delete players[msg.from];cleanPeer(msg.from);updParts();
   }
   else if(msg.type==='offer')         await onOffer(msg.from,msg.sdp);
   else if(msg.type==='answer')        await onAnswer(msg.from,msg.sdp);
@@ -864,16 +924,9 @@ new ResizeObserver(resize).observe(canvas);
 document.fonts.ready.then(()=>{studioDirty=true;});
 
 const CHAIRS=[[.5,.36],[.31,.43],[.69,.43],[.33,.72],[.67,.72],[.5,.79],[.17,.60],[.83,.60]];
-let usedChairs={};
-function getChair(pid){
-  if(usedChairs[pid]!==undefined)return usedChairs[pid];
-  const used=new Set(Object.values(usedChairs));
-  for(let i=0;i<CHAIRS.length;i++)if(!used.has(i)){usedChairs[pid]=i;return i;}
-  usedChairs[pid]=Object.keys(usedChairs).length%CHAIRS.length;return usedChairs[pid];
-}
+function getChair(pid){return players[pid]?.seat;}
 function ppos(p){
-  if(p.moved)return{sx:p.wx,sy:p.wy};
-  const cp=CHAIRS[getChair(p.id)];return{sx:CW*cp[0],sy:CH*cp[1]};
+  const cp=CHAIRS[p.seat]||[.5,.5];return{sx:CW*cp[0],sy:CH*cp[1]};
 }
 function pill(c,x,y,w,h,r,fill,stroke){
   c.beginPath();c.roundRect(x,y,w,h,r);
@@ -996,7 +1049,7 @@ function drawRoom(){
 }
 function drawChairs(){
   const unit=Math.max(.65,Math.min(CW/900,CH/620,1.3));
-  const occupied=new Set(Object.values(players).filter(p=>!p.listener&&!p.moved).map(p=>getChair(p.id)));
+  const occupied=new Set(Object.values(players).filter(p=>!p.listener).map(p=>getChair(p.id)));
   CHAIRS.forEach((cp,i)=>{
     const x=CW*cp[0],y=CH*cp[1],w=48*unit,h=48*unit;
     ctx.save();ctx.translate(x,y);
@@ -1009,12 +1062,13 @@ function drawChairs(){
     pill(ctx,-w*.48,-h*.28,w*.96,h*.30,9*unit,fabric,'#c9afce30');
     [-1,1].forEach(s=>pill(ctx,s*w*.5-w*.06,-h*.42,w*.12,h*.33,4*unit,'#403548','#947e9b33'));
     if(!occupied.has(i)&&CW>580){ctx.fillStyle='#b7a4c188';ctx.font=`700 ${9*unit}px Nunito,sans-serif`;ctx.textAlign='center';ctx.fillText(String(i+1).padStart(2,'0'),0,-h*.47);}
+    if(occupied.has(i)){ctx.fillStyle="#91dfba";ctx.beginPath();ctx.arc(w*.55,0,3*unit,0,Math.PI*2);ctx.fill();}
     ctx.restore();
   });
 }
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
-  const s=Math.max(.72,Math.min(CW/780,CH/540,1.30));
+  const s=Math.min(CW/390,CH/280,Math.max(.45,Math.min(CW/780,CH/540,1.30)));
   const talking=!!speaking[p.id]||(isMe&&!isMuted);
   const bob=reducedMotion.matches?0:Math.sin(animT/550+(p.avatar||0))*(talking?1.5:.45);
   ctx.save();ctx.translate(sx,sy);ctx.scale(s,s);
@@ -1023,7 +1077,7 @@ function drawPlayer(p,sx,sy,isMe){
   ctx.translate(0,bob);
   paintAvatar(ctx,p.avatar,p.color);
   // Readable labels stay below the avatar so faces never compete with names.
-  const label=p.name+(isMe?' · você':'');ctx.font='800 11px Nunito,sans-serif';
+  const label=String(p.seat+1).padStart(2,'0')+' · '+p.name+(isMe?' · você':'');ctx.font='800 11px Nunito,sans-serif';
   const width=Math.min(132,ctx.measureText(label).width+22);
   pill(ctx,-width/2,14,width,23,11,'#14111fed',talking?'#83d6b5aa':'#b89bc044');
   ctx.fillStyle=isMe?'#e1c5ff':'#eee6f3';ctx.fillText(label,0,29,width-14);
@@ -1074,10 +1128,10 @@ function render(ts){
   if(!running)return;animT=ts;resize();
   ctx.clearRect(0,0,CW,CH);
   drawRoom();drawChairs();
-  Object.values(players).filter(p=>!p.listener).sort((a,b)=>ppos(a).sy-ppos(b).sy).forEach(p=>{
+  Object.values(players).filter(p=>!p.listener&&Number.isInteger(p.seat)).sort((a,b)=>ppos(a).sy-ppos(b).sy).forEach(p=>{
     const{sx,sy}=ppos(p);drawPlayer(p,sx,sy,p.id===myId);
   });
-  drawBubbles(ts);drawEffects(ts);
+  drawBubbles(ts);drawEffects(ts);recordingPaintFrame();
   requestAnimationFrame(render);
 }
 
@@ -1093,18 +1147,6 @@ function gameLoop(ts){
   if(entryMode==='listen'){requestAnimationFrame(gameLoop);return;}
   const me=players[myId];if(!me){requestAnimationFrame(gameLoop);return;}
   tickEnergy(ts);
-  let dx=jdx(),dy=jdy();
-  // FIX: só usa teclado se não estiver digitando
-  if(!isTyping()){const k=kd();dx+=k.x;dy+=k.y;}
-  const len=Math.sqrt(dx*dx+dy*dy);
-  if(len>0){
-    if(len>1){dx/=len;dy/=len;}
-    if(!me.moved){const p=ppos(me);me.wx=p.sx;me.wy=p.sy;me.moved=true;}
-    me.wx=Math.max(20,Math.min(CW-20,me.wx+dx*2.4));
-    me.wy=Math.max(CH*.28,Math.min(CH*.87,me.wy+dy*2.4));
-    const now=performance.now();
-    if(now-lastBC>65){wsSend({type:'move',wx:me.wx,wy:me.wy,moved:true});lastBC=now;}
-  }
   requestAnimationFrame(gameLoop);
 }
 
@@ -1222,8 +1264,10 @@ function updParts(){
   const html=all.map(p=>`
     <div class="pr">
       <div class="prav">${p.listener?'👁️':`<img src="${AVS[AVATARS.indexOf(avatarSpec(p.avatar))]}" alt="">`}</div>
-      <span class="prn ${p.id===myId?'me':''}">${esc(p.name)}${p.id===myId?' 👑':''}</span>
+      <span class="prn ${p.id===myId?'me':''}">${esc(p.name)}${p.isAdmin?' 👑':(p.id===myId?' · você':'')}</span>
       <span class="prmic ${speaking[p.id]?'spk':'mut'}" id="mic-${p.id}">${p.listener?'👁️':(speaking[p.id]?'🎤':'🔇')}</span>
+      ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">● Poltrona ${String(p.seat+1).padStart(2,'0')} ocupada</small>`:''}
+      ${adminParticipantControls(p)}
     </div>`).join('');
   document.getElementById('plist').innerHTML=html;
   document.getElementById('fs-plist').innerHTML=html;
@@ -1282,6 +1326,15 @@ document.getElementById('fs-cinrow').addEventListener('touchend', e=>{
 document.getElementById('btn-mic').onclick=toggleMic;
 
 // ── LOGIN ────────────────────────────────────────────────────
+function expandChat(force){
+  const panel=document.getElementById('rpanel');
+  const expanded=typeof force==='boolean'?force:!panel.classList.contains('chat-expanded');
+  togglePanel(true);panel.classList.toggle('chat-expanded',expanded);
+  const button=document.getElementById('btn-chat-expand');
+  button.textContent=expanded?'↙ Voltar à sala':'⛶ Expandir';button.setAttribute('aria-expanded',String(expanded));
+  document.getElementById('cin').focus();resize();
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('rpanel').classList.contains('chat-expanded'))expandChat(false);});
 function togglePanel(force){
   const panel=document.getElementById('rpanel');
   const open=typeof force==='boolean'?force:panel.classList.contains('hidden');
@@ -1345,5 +1398,8 @@ if('serviceWorker' in navigator){
   });
 }
 </script>
+<script src="/tus.min.js"></script>
+<script src="/episodes.js"></script>
+<script src="/admin.js"></script>
 </body>
 </html>

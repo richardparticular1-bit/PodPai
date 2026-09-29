@@ -7,6 +7,9 @@ const { WebSocketServer } = require('ws');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+const episodeStorage=require('./episode-storage').createEpisodeStorage();
 
 const PORT = process.env.PORT || 3001;
 
@@ -33,6 +36,9 @@ const server = http.createServer((req, res) => {
     '/index.html':  'client.html',
     '/manifest.json':'manifest.json',
     '/sw.js':       'sw.js',
+    '/admin.js':    'admin.js',
+    '/episodes.js': 'episodes.js',
+    '/tus.min.js': 'node_modules/tus-js-client/dist/tus.min.js',
     '/icon-192.png':'icon-192.png',
     '/icon-512.png':'icon-512.png',
   };
@@ -46,58 +52,132 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(fileName);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': fileName === 'client.html' ? 'no-cache' : 'public, max-age=86400',
+    'Cache-Control': ['client.html','admin.js','episodes.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
   });
   fs.createReadStream(filePath).pipe(res);
 });
 
 // ── WEBSOCKET ────────────────────────────────────────────────
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, maxPayload: 65536 });
 const clients = new Map();
+const removedIds = new Set();
+const authFailures = new Map();
+const adminPassword = process.env.ADMIN_PASSWORD || '';
+let recording = null;
+const snapshot = (id,c) => ({id,name:c.name,avatar:c.avatar,color:c.color,seat:c.seat,wx:c.wx,wy:c.wy,moved:c.moved,listener:c.listener,isAdmin:c.isAdmin,adminMuted:c.adminMuted});
+function recordingState(){return {type:'recording_state',recording};}
+function endRecording(id){if(recording?.by===id){recording=null;broadcast(recordingState());}}
 
 function send(ws, data)        { if (ws.readyState === 1) ws.send(JSON.stringify(data)); }
 function broadcast(data, skip) { for (const [id, c] of clients) if (id !== skip) send(c.ws, data); }
 function sendTo(id, data)      { const c = clients.get(id); if (c) send(c.ws, data); }
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws,req) => {
   let myId = null;
+  ws.alive=true;
+  ws.on('pong',()=>{ws.alive=true;});
+  const address=req.socket.remoteAddress;
+
 
   ws.on('message', (raw) => {
     let msg; try { msg = JSON.parse(raw.toString()); } catch { return; }
+    if(!msg||typeof msg!=='object'||Array.isArray(msg))return;
+    const reject=message=>send(ws,{type:'admin_error',requestType:msg.type,message});
 
     if (msg.type === 'join') {
+      if(myId)return;
+      if(typeof msg.id!=='string'||!/^[-a-zA-Z0-9_]{1,80}$/.test(msg.id)||clients.has(msg.id)){ws.close(1008,'Invalid or duplicate identity');return;}
+      if(removedIds.has(msg.id)){send(ws,{type:'removed',message:'Você foi removido desta sessão.'});ws.close(4003,'Removed');return;}
+      const occupied=new Set([...clients.values()].map(c=>c.seat));
+      const seat=msg.listener===true?null:Array.from({length:8},(_,i)=>i).find(i=>!occupied.has(i));
+      if(msg.listener!==true&&seat===undefined){send(ws,{type:"room_full",message:"As 8 poltronas estão ocupadas. Entre como ouvinte."});ws.close(1008,"Room full");return;}
       myId = msg.id;
-      clients.set(myId, { ws, name: msg.name, avatar: msg.avatar, color: msg.color, wx: msg.wx||0, wy: msg.wy||0, moved: false, listener: msg.listener });
+      clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:0,wy:0,moved:false,listener:msg.listener===true,isAdmin:false,adminMuted:false});
       const existing = [...clients.entries()]
         .filter(([id]) => id !== myId)
-        .map(([id, c]) => ({ id, name: c.name, avatar: c.avatar, color: c.color, wx: c.wx, wy: c.wy, moved: c.moved, listener: c.listener }));
-      send(ws, { type: 'room_state', players: existing });
-      broadcast({ type: 'join', from: myId, name: msg.name, avatar: msg.avatar, color: msg.color, wx: msg.wx||0, wy: msg.wy||0, listener: msg.listener }, myId);
-      console.log(`[+] ${msg.name}${msg.listener?' (ouvinte)':''} | ${clients.size} online`);
+        .map(([id, c]) => snapshot(id,c));
+      send(ws, { type: 'room_state', players: existing, self:snapshot(myId,clients.get(myId)), recording });
+      broadcast({ type: 'join', from: myId, ...snapshot(myId,clients.get(myId)) }, myId);
+      console.log(`[+] Participant joined | ${clients.size} online`);
     }
-    else if (msg.type === 'move' && myId) {
-      const c = clients.get(myId);
-      if (c) Object.assign(c, { wx: msg.wx, wy: msg.wy, moved: true });
-      broadcast({ type: 'move', from: myId, wx: msg.wx, wy: msg.wy, moved: true }, myId);
+    else if(!myId||clients.get(myId)?.ws!==ws)return;
+    else if(msg.type==='cloud_request'){
+      const c=clients.get(myId);
+      const reply=(result,error)=>send(ws,{type:'cloud_result',requestId:msg.requestId,result,error});
+      if(typeof msg.requestId!=='string'||msg.requestId.length>80)return;
+      if(!c.isAdmin){reply(null,'Esta ação exige acesso de administrador.');return;}
+      if((c.cloudPending||0)>=4){reply(null,'Aguarde as operações em andamento.');return;}
+      c.cloudPending=(c.cloudPending||0)+1;
+      episodeStorage.request(msg.action,msg.input||{}).then(result=>{
+        if(clients.get(myId)===c&&c.isAdmin)reply(result);
+      }).catch(error=>reply(null,error.message)).finally(()=>c.cloudPending--);
     }
+    else if(msg.type==='admin_login'){
+
+      if(!adminPassword){reject('Configure ADMIN_PASSWORD no Render para habilitar a administração.');return;}
+      const now=Date.now();
+      for(const [key,value] of authFailures)if(value.until<now)authFailures.delete(key);
+      const failure=authFailures.get(address);
+      if(failure?.count>=5){reject('Muitas tentativas. Aguarde um minuto.');return;}
+      const supplied=typeof msg.password==='string'?msg.password:'';
+      const digest=value=>crypto.createHash('sha256').update(value).digest();
+      if(!crypto.timingSafeEqual(digest(supplied),digest(adminPassword))){
+        if(authFailures.size<1000||authFailures.has(address))authFailures.set(address,{count:(failure?.count||0)+1,until:now+60000});
+        reject('Senha incorreta.');return;
+      }
+      authFailures.delete(address);clients.get(myId).isAdmin=true;
+      send(ws,{type:'admin_authenticated'});broadcast({type:'participant_role',id:myId,isAdmin:true});
+    }
+    else if(msg.type==='admin_action'){
+      if(!clients.get(myId).isAdmin){reject('Esta ação exige acesso de administrador.');return;}
+      const target=clients.get(msg.target);
+      if(!target||msg.target===myId||target.isAdmin){reject('Selecione outro participante que não seja administrador.');return;}
+      if(msg.action==='mute'||msg.action==='unmute'){
+        target.adminMuted=msg.action==='mute';
+        broadcast({type:'participant_moderation',id:msg.target,adminMuted:target.adminMuted});
+      }else if(msg.action==='remove'){
+        if(removedIds.size<10000)removedIds.add(msg.target);
+        send(target.ws,{type:'removed',message:'Você foi removido da sala pelo administrador.'});
+        clients.delete(msg.target);broadcast({type:'leave',from:msg.target});endRecording(msg.target);
+        target.ws.close(4003,'Removed by administrator');
+      }
+    }
+    else if(msg.type==='recording_start'){
+      if(!clients.get(myId).isAdmin){reject('Somente administradores podem gravar.');return;}
+      if(recording){reject('Já existe uma gravação em andamento.');return;}
+      recording={by:myId,name:clients.get(myId).name,startedAt:Date.now(),mode:msg.mode==='video'?'video':'audio'};
+      broadcast(recordingState());
+    }
+    else if(msg.type==='recording_stop'){
+      if(recording?.by!==myId){reject('Somente quem iniciou pode encerrar a gravação.');return;}
+      endRecording(myId);
+    }
+    // Seats are assigned by the server. Legacy movement messages are ignored.
     else if (msg.type === 'chat' && myId) {
-      broadcast({ type: 'chat', from: myId, text: msg.text }, myId);
+      if(typeof msg.text!=='string')return;
+      broadcast({ type: 'chat', from: myId, text: msg.text.slice(0,500) }, myId);
     }
     else if (msg.type === 'skill' && myId) {
+      if(!Number.isInteger(msg.cardId)||msg.cardId<0||msg.cardId>4||!Number.isFinite(msg.wx)||!Number.isFinite(msg.wy))return;
       broadcast({ type: 'skill', from: myId, cardId: msg.cardId, wx: msg.wx, wy: msg.wy }, myId);
     }
     else if (['offer','answer','ice-candidate'].includes(msg.type) && myId) {
-      sendTo(msg.to, { ...msg, from: myId });
+      sendTo(msg.to, {type:msg.type,from:myId,sdp:msg.sdp,candidate:msg.candidate});
     }
   });
 
   ws.on('close', () => {
     if (!myId) return;
     const c = clients.get(myId);
-    if (c) { broadcast({ type: 'leave', from: myId }); clients.delete(myId); console.log(`[-] ${c.name} | ${clients.size} online`); }
+    if (c?.ws===ws) { clients.delete(myId);broadcast({ type: 'leave', from: myId });endRecording(myId);console.log(`[-] Participant left | ${clients.size} online`); }
   });
 
   ws.on('error', () => {});
 });
 
-server.listen(PORT, () => console.log(`🎙️  PODPAI CAST — porta ${PORT}`));
+// Release seats when a device disappears without a clean close frame.
+const heartbeat=setInterval(()=>{
+  for(const ws of wss.clients){if(!ws.alive){ws.terminate();continue;}ws.alive=false;ws.ping();}
+},30000);
+wss.on('close',()=>clearInterval(heartbeat));
+server.listen(PORT, () => console.log(`🎙️  PODPAI CAST — porta ${server.address().port}`));
