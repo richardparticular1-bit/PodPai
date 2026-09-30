@@ -27,7 +27,9 @@ function createEpisodeStorage(env=process.env, clientFactory=createClient){
       const {data,error}=await store.createSignedUploadUrl(path);
       if(error)throw new Error('Não foi possível autorizar o envio ao Supabase.');
       const endpoint=new URL(url);endpoint.hostname=endpoint.hostname.replace(/\.supabase\.co$/,'.storage.supabase.co');
-      return {path,token:data.token,bucket,endpoint:endpoint.origin+'/storage/v1/upload/resumable'};
+      // x-signature is accepted by the signed TUS route; the regular route
+      // expects a user JWT and rejects this flow with "Invalid Compact JWS".
+      return {path,token:data.token,bucket,endpoint:endpoint.origin+'/storage/v1/upload/resumable/sign'};
     }
     if(action==='list'){
       const offset=Number.isInteger(input.offset)&&input.offset>=0?Math.min(input.offset,100000):0;

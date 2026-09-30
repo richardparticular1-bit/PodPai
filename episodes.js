@@ -49,7 +49,9 @@ function saveEpisodePart(blob,episode,part){
       backup.remove();retry.remove();URL.revokeObjectURL(objectUrl);blob=null;upload=null;
       if(isAdmin)loadReplays();
     }catch(error){
-      status.textContent=`Parte ${part} ainda não foi salva. ${error.message} Mantenha a aba aberta ou baixe a cópia.`;
+      const code=error.originalResponse?.getStatus?.();
+      const detail=code?`O armazenamento recusou o envio (HTTP ${code}). Tente novamente; se persistir, informe este código.`:error.message;
+      status.textContent=`Parte ${part} ainda não foi salva. ${detail} Mantenha a aba aberta ou baixe a cópia.`;
       // Get a fresh signed token on manual retry; expired grants must not trap the recording.
       upload=null;retry.hidden=false;
     }finally{pendingUploads--;}
