@@ -59,3 +59,7 @@ Clique em uma poltrona livre ou escolha o número e use **Sentar**. **Levantar**
 **Pedir a palavra** entra na fila do painel do apresentador. O administrador pode liberar o microfone solicitado, silenciar todos os participantes ou moderar individualmente. Liberar não ativa o microfone automaticamente. O halo e o medidor acompanham áudio detectado, não apenas o estado do botão.
 
 No celular, joystick, microfone e chat ficam abaixo da área do estúdio.
+
+## Entrada e saída lateral
+
+Participantes chegam em pé junto à porta esquerda. Caminhe com os controles ou escolha uma poltrona para sentar. A poltrona ocupada continua visível, com postura sentada. Para sair, volte à porta e clique nela ou em **Sair do podcast**. Passar perto não desconecta. A saída desliga o microfone e volta à tela inicial; gravações e envios pendentes devem ser concluídos primeiro.

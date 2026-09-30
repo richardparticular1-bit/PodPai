@@ -12,6 +12,7 @@ document.getElementById('raise-button').onclick=()=>wsSend({type:'hand_raise',ra
 canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
   const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+  if(x<.20&&y>.20&&y<.52){exitThroughDoor();return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
   if(seat>=0)requestSeat({type:'sit',seat});
 });
@@ -56,3 +57,18 @@ refreshExperience();
 const titleField=document.createElement('label');titleField.textContent='Título do episódio ';const titleInput=document.createElement('input');titleInput.id='episode-title';titleInput.maxLength=120;titleInput.placeholder='Conversa no PodPai';titleField.append(titleInput);document.getElementById('btn-record').before(titleField);
 
 const originalMicUI=updMicUI;updMicUI=function(){originalMicUI();document.getElementById('mobile-mic').textContent=isMuted?'🔇 Ativar mic':'🎤 Silenciar mic';};updMicUI();
+
+// The door never disconnects someone merely for walking past it.
+const exitButton=document.createElement('button');exitButton.id='exit-studio';exitButton.type='button';exitButton.textContent='Sair do podcast';exitButton.onclick=exitThroughDoor;dock.append(exitButton);
+function nearDoor(){const p=players[myId];return !!p&&(p.listener||(p.moved&&Math.abs(p.wx-.12)<.09&&Math.abs(p.wy-.48)<.12));}
+function exitThroughDoor(){
+ if(!running)return;
+ if(!nearDoor()){showToast('Caminhe até a porta à esquerda para sair.');return;}
+ if(recorder||recordPending||recordStarting||pendingUploads||unsavedParts){showToast('Finalize a gravação e conclua os envios antes de sair.');if(!document.getElementById('admin-dialog').open)document.getElementById('admin-dialog').showModal();return;}
+ intentionalExit=true;running=false;localStream?.getTracks().forEach(t=>t.stop());Object.keys(peers).forEach(cleanPeer);ws?.close(1000,'Left studio');wakeLock?.release();location.reload();
+}
+setInterval(()=>{exitButton.disabled=!running;exitButton.title=nearDoor()?'Desligar o microfone e voltar à entrada':'Caminhe até a porta à esquerda';exitButton.classList.toggle('at-door',nearDoor());},250);
+style.textContent+=`
+#studio-controls{min-height:60px;gap:8px;flex-wrap:wrap}#studio-controls #jzone{width:56px;height:56px;flex-basis:56px}#jbase{width:56px;height:56px}#jknob{width:28px;height:28px}#studio-controls button,#studio-controls select{padding:7px 10px;min-height:36px;font-size:12px}.movement-controls{gap:5px}#exit-studio{margin-left:auto}#exit-studio.at-door{border-color:#9edcc2;background:#234238}#bottom{gap:12px}#bottom .rb{min-height:34px;padding:6px 10px}#bottom #erow{width:120px}#shell{gap:8px}#pwrap{padding:10px 14px;max-height:25%;min-height:72px}#ptitle{margin-bottom:5px}#lcount{margin-top:4px}#ewrap{padding:6px 12px}#etitle{display:none}#ecard{padding:7px 9px}#eicon{font-size:18px;margin:0}#ctbar{padding:9px 12px}#cmsgs{padding:10px 14px;gap:8px;flex:1;min-height:100px}#cinrow{padding:8px}#cwrap{min-height:190px}#rpanel{overflow:hidden}.pr{padding:3px 0}.room-hint{bottom:12px;font-size:10px}
+@media(max-width:760px){#studio-controls{grid-template-columns:56px 1fr;min-height:0;gap:4px}#studio-controls #jzone{height:56px;grid-row:1/3}#studio-controls button{min-height:36px;padding:6px;font-size:11px}#raise-button{grid-column:2}#exit-studio{grid-column:2;margin:0;grid-row:3;justify-self:end;width:104px;z-index:1}.mobile-actions{grid-row:3;padding-right:108px}#cwrap{min-height:160px}#pwrap{max-height:24%}body.listener #studio-controls{display:flex}body.listener #studio-controls>*:not(#exit-studio){display:none}}
+`;

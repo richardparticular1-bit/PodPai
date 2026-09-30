@@ -479,16 +479,23 @@ const AVATARS=[
   {name:'Masculino · pele clara, cabelo loiro curto',skin:'#f1cfb4',shade:'#d8aa8d',hair:'#bd9358',style:'short',shirt:'#b296c7'},
 ];
 function avatarSpec(index){return AVATARS[Number.isInteger(index)&&index>=0&&index<AVATARS.length?index:0];}
-function paintAvatar(c,index,color){
+function paintAvatar(c,index,color,seated=false){
   const a=avatarSpec(index),long=['long','waves','curls'].includes(a.style);
   c.save();
   if(long)pill(c,-24,-76,48,57,19,a.hair);
   if(a.style==='bun')oval(c,0,-81,13,12,a.hair);
   if(a.style==='curls')for(let i=0;i<9;i++){const t=Math.PI+i*Math.PI/8;oval(c,Math.cos(t)*23,-53+Math.sin(t)*24,10,11,a.hair);}
-  pill(c,-14,-11,11,17,5,'#201d2d');pill(c,3,-11,11,17,5,'#201d2d');
-  pill(c,-17,0,15,7,3,'#d0bdd1');pill(c,2,0,15,7,3,'#d0bdd1');
+  if(seated){
+    // Bent thighs, knees and forward-facing shoes remain visible above the seat.
+    pill(c,-20,-10,19,10,5,'#292336');pill(c,1,-10,19,10,5,'#292336');
+    pill(c,-21,-5,9,13,4,'#201d2d');pill(c,12,-5,9,13,4,'#201d2d');
+    pill(c,-24,5,15,7,3,'#d0bdd1');pill(c,9,5,15,7,3,'#d0bdd1');
+  }else{
+    pill(c,-14,-11,11,17,5,'#201d2d');pill(c,3,-11,11,17,5,'#201d2d');
+    pill(c,-17,0,15,7,3,'#d0bdd1');pill(c,2,0,15,7,3,'#d0bdd1');
+  }
   const jacket=c.createLinearGradient(-20,-38,20,-5);jacket.addColorStop(0,color||a.shirt);jacket.addColorStop(1,'#423249');
-  pill(c,-19,-37,38,32,12,jacket);pill(c,-24,-32,9,24,4,jacket);pill(c,15,-32,9,24,4,jacket);
+  pill(c,-19,-37,38,32,12,jacket);pill(c,-24,-32,9,seated?17:24,4,jacket);pill(c,15,-32,9,seated?17:24,4,jacket);if(seated){pill(c,-29,-19,13,7,3,a.skin);pill(c,16,-19,13,7,3,a.skin);}
   c.strokeStyle='#ffffff35';c.lineWidth=1;c.beginPath();c.moveTo(0,-31);c.lineTo(0,-7);c.stroke();
   pill(c,-5,-44,10,13,4,a.skin);oval(c,-17,-52,4,6,a.skin);oval(c,17,-52,4,6,a.skin);
   const face=c.createLinearGradient(-15,-69,16,-39);face.addColorStop(0,a.skin);face.addColorStop(1,a.shade);
@@ -825,7 +832,7 @@ function updFsSpk(){
 // ── WEBSOCKET ────────────────────────────────────────────────
 let ws=null,wsUrl='';
 let myId=null,myName='',myAvatar=0,myColor='';
-let players={},running=false;
+let players={},running=false,intentionalExit=false;
 
 function connectWS(url){
   wsUrl=url;currentWsUrl=url;
@@ -841,6 +848,7 @@ function connectWS(url){
     await onMsg(m);
   };
   ws.onclose=e=>{
+    if(intentionalExit)return;
     adminDisconnected();
     Object.keys(peers).forEach(cleanPeer);
     if(e.code===4003||removedFromRoom){document.getElementById('conn').textContent='● removido';return;}
@@ -848,7 +856,7 @@ function connectWS(url){
     document.getElementById('conn').textContent='● reconectando…';
     document.getElementById('conn').className='';
     showToast('⚠️ Reconectando...');
-    setTimeout(()=>connectWS(wsUrl),4000);
+    setTimeout(()=>{if(!intentionalExit)connectWS(wsUrl);},4000);
   };
   ws.onerror=()=>{};
 }
@@ -1053,12 +1061,22 @@ function drawRoom(){
     studioLayer.width=canvas.width;studioLayer.height=canvas.height;
     const c=studioLayer.getContext('2d');c.setTransform(renderScale,0,0,renderScale,0,0);paintStudio(c);studioDirty=false;
   }
-  ctx.drawImage(studioLayer,0,0,CW,CH);
+  ctx.drawImage(studioLayer,0,0,CW,CH);drawStudioDoor();
+}
+function drawStudioDoor(){
+  const x=CW*.12,y=CH*.48,w=Math.min(CW*.13,70),h=Math.min(CH*.23,110);
+  ctx.save();pill(ctx,x-w*.56,y-h,w*1.12,h+4,5,'#574461','#b59bc477');
+  pill(ctx,x-w*.46,y-h+5,w*.92,h-5,3,'#191321');
+  const light=ctx.createLinearGradient(x-w*.5,y-h,x+w*.5,y);light.addColorStop(0,'#665579');light.addColorStop(1,'#282134');
+  pill(ctx,x-w*.43,y-h+7,w*.75,h-8,3,light,'#bfa5cd55');oval(ctx,x+w*.23,y-h*.46,2.5,2.5,'#d9c48c');
+  ctx.textAlign='center';ctx.fillStyle='#dcebdc';ctx.font='800 '+Math.max(8,Math.min(11,CW/65))+'px Nunito,sans-serif';ctx.fillText('ENTRADA / SAÍDA',x,y-h-8);
+  oval(ctx,x,y+8,w*.65,8,'#9edcc222');ctx.restore();
 }
 function drawChairs(){
   const unit=Math.max(.65,Math.min(CW/900,CH/620,1.3));
   const occupied=new Set(Object.values(players).filter(p=>!p.listener&&!p.moved).map(p=>getChair(p.id)));
   CHAIRS.forEach((cp,i)=>{
+    if(occupied.has(i))return;
     const x=CW*cp[0],y=CH*cp[1],w=48*unit,h=48*unit;
     ctx.save();ctx.translate(x,y);
     oval(ctx,2,h*.22,w*.62,h*.19,'#05070c66');
@@ -1076,14 +1094,22 @@ function drawChairs(){
 }
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
-  const s=Math.min(CW/700,CH/360,1.30);
+  const seated=!p.moved,s=Math.min(CW/700,CH/360,1.30)*(seated?.84:1);
   const talking=!!speaking[p.id];
   const bob=reducedMotion.matches?0:Math.sin(animT/550+(p.avatar||0))*(talking?1.5:.45);
   ctx.save();ctx.translate(sx,sy);ctx.scale(s,s);
   oval(ctx,0,5,22,7,'#05081177');
   if(isMe||talking){ctx.beginPath();ctx.ellipse(0,4,26+(talking&&!reducedMotion.matches?Math.sin(animT/150)*2:0),9,0,0,Math.PI*2);ctx.strokeStyle=talking?'#9af1d4':'#bd9affaa';ctx.lineWidth=1.8;ctx.stroke();}
   ctx.translate(0,bob);
-  paintAvatar(ctx,p.avatar,p.color);
+  if(seated){
+    // Draw the occupied armchair at avatar scale so the back and arms are never hidden.
+    pill(ctx,-34,-61,68,62,13,'#584561','#bca1c477');
+    pill(ctx,-28,-55,56,41,10,'#6b5275','#c9afcf44');
+    pill(ctx,-35,-9,70,16,7,'#45364e','#a68aac66');
+    [-1,1].forEach(dir=>pill(ctx,dir*27-3,4,6,12,2,'#322a3d'));
+    ctx.save();ctx.translate(0,-3);paintAvatar(ctx,p.avatar,p.color,true);ctx.restore();
+    [-1,1].forEach(dir=>pill(ctx,dir*33-5,-24,10,29,5,'#765980','#c6a9ce77'));
+  }else paintAvatar(ctx,p.avatar,p.color);
   // Readable labels stay below the avatar so faces never compete with names.
   const label=(p.moved?'':String(p.seat+1).padStart(2,'0')+' · ')+p.name+(isMe?' · você':'');ctx.font='800 11px Nunito,sans-serif';
   const width=Math.min(132,ctx.measureText(label).width+22);

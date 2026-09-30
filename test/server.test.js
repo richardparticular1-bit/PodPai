@@ -19,8 +19,9 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
     }};clients.push(c);c.send({type:'join',id,name:id,listener,seat:7,isAdmin:true});return c;
   }
   const admin=await connect('admin'),first=await admin.next('room_state');
-  assert.equal(first.self.seat,0);assert.equal(first.self.isAdmin,false);
-  const b=await connect('guest');assert.equal((await b.next('room_state')).self.seat,1);
+  assert.equal(first.self.seat,0);assert.equal(first.self.isAdmin,false);assert.equal(first.self.moved,true);assert.equal(first.self.wx,.12);assert.equal(first.self.wy,.48);
+  admin.send({type:'sit',seat:0});await admin.next('seat_state');
+  const b=await connect('guest');assert.equal((await b.next('room_state')).self.seat,1);b.send({type:'sit',seat:1});await b.next('seat_state');
   b.send({type:'admin_action',action:'mute',target:'admin'});await b.next('admin_error');
   b.send({type:'cloud_request',requestId:'forbidden',action:'list'});assert.match((await b.next('cloud_result')).error,/administrador/);
   b.send({type:'recording_start'});await b.next('admin_error');
@@ -30,7 +31,7 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   admin.send({type:'admin_action',action:'unmute',target:'guest'});assert.equal((await b.next('participant_moderation')).adminMuted,false);
   b.send({type:'move',wx:99999,wy:-5000});
   const listener=await connect('listener',true),snapshot=await listener.next('room_state');
-  assert.equal(snapshot.self.seat,null);assert.equal(snapshot.players.find(p=>p.id==='guest').seat,1);assert.equal(snapshot.players.find(p=>p.id==='guest').wx,0);
+  assert.equal(snapshot.self.seat,null);assert.equal(snapshot.players.find(p=>p.id==='guest').seat,1);assert.equal(snapshot.players.find(p=>p.id==='guest').wx,.12);
   b.send({type:'move',space:'normalized',wx:.7,wy:.6});
   const moved=await listener.next('move');assert.equal(moved.wx,.7);assert.equal(moved.wy,.6);assert.equal(moved.from,'guest');
   b.send({type:'move',space:'normalized',wx:8,wy:-5});
@@ -47,7 +48,8 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   admin.send({type:'admin_action',action:'mute_all'});assert.equal((await b.next('participant_moderation')).adminMuted,true);
   admin.send({type:'admin_action',action:'approve',target:'guest'});assert.equal((await b.next('hand_state')).handRaisedAt,null);assert.equal((await b.next('participant_moderation')).adminMuted,false);
   const late=await connect('late');const lateState=await late.next('room_state');assert.equal(lateState.recording.by,'admin');assert.equal(lateState.self.seat,2);assert.equal(lateState.players.find(p=>p.id==='guest').wx,.31);assert.equal(lateState.players.find(p=>p.id==='guest').moved,false);assert.equal(lateState.players.find(p=>p.id==='listener').moved,false);
-  for(let n=3;n<8;n++){const c=await connect('seat'+n);assert.equal((await c.next('room_state')).self.seat,n);}
+  late.send({type:'sit',seat:2});await late.next('seat_state');
+  for(let n=3;n<8;n++){const c=await connect('seat'+n);assert.equal((await c.next('room_state')).self.seat,n);c.send({type:'sit',seat:n});await c.next('seat_state');}
   const full=await connect('full');await full.next('room_full');
   admin.send({type:'admin_action',action:'remove',target:'guest'});await b.next('removed');
   const removed=await connect('guest');await removed.next('removed');
