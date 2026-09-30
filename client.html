@@ -640,6 +640,8 @@ async function initMic(){
     });
     localStream.getAudioTracks().forEach(t=>t.enabled=false);
     isMuted=true;updMicUI();
+    const source=getAC().createMediaStreamSource(localStream),an=getAC().createAnalyser();an.fftSize=256;source.connect(an);analysers[myId]=an;
+    recordingAttach(myId,localStream);
     return true;
   }catch(e){showToast('🎙️ Sem acesso ao microfone: '+e.message);return false;}
 }
@@ -662,7 +664,7 @@ function toggleMic(){
     }
   });
   playSound(isMuted?'micOff':'micOn');
-  updMicUI();updSpeaking(myId,!isMuted);
+  updMicUI();if(isMuted){speaking[myId]=false;updSpeaking(myId,false);}
   showToast(isMuted?'🔇 Mudo':'🎤 Microfone ligado!');
 }
 
@@ -675,9 +677,9 @@ function updMicUI(){
     if(n)n.classList.remove('live');
     if(fm){fm.className='';fm.innerHTML='🔇 Mudo';}
   }else{
-    b.className='live';b.innerHTML='🎤 Falando';
+    b.className='live';b.innerHTML='🎤 Mic ligado';
     if(n)n.classList.add('live');
-    if(fm){fm.className='live';fm.innerHTML='🎤 Falando';}
+    if(fm){fm.className='live';fm.innerHTML='🎤 Mic ligado';}
   }
 }
 
@@ -792,7 +794,9 @@ setInterval(()=>{
     try{
       an.getByteFrequencyData(buf);
       const avg=buf.reduce((a,b)=>a+b,0)/buf.length;
-      const s=avg>8&&!players[pid]?.adminMuted;
+      const level=players[pid]?.adminMuted||(pid===myId&&isMuted)?0:avg;
+      const meter=document.getElementById('level-'+pid);if(meter)meter.value=Math.min(100,level*2);
+      const s=level>8;
       if(s!==speaking[pid]){speaking[pid]=s;updSpeaking(pid,s);}
     }catch{}
   });
@@ -1073,7 +1077,7 @@ function drawChairs(){
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
   const s=Math.min(CW/700,CH/360,1.30);
-  const talking=!!speaking[p.id]||(isMe&&!isMuted);
+  const talking=!!speaking[p.id];
   const bob=reducedMotion.matches?0:Math.sin(animT/550+(p.avatar||0))*(talking?1.5:.45);
   ctx.save();ctx.translate(sx,sy);ctx.scale(s,s);
   oval(ctx,0,5,22,7,'#05081177');
@@ -1152,7 +1156,7 @@ function gameLoop(ts){
   if(entryMode==='listen'){requestAnimationFrame(gameLoop);return;}
   const me=players[myId];if(!me){requestAnimationFrame(gameLoop);return;}
   tickEnergy(ts);
-  if(Number.isInteger(me.seat)&&!isTyping()){
+  if(Number.isInteger(me.seat)&&!(typeof seatingPending!=='undefined'&&seatingPending)&&!isTyping()){
     const k=kd(),dx=jdx()+k.x,dy=jdy()+k.y;
     if(dx||dy){
       const initial=CHAIRS[me.seat],pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt);
@@ -1286,6 +1290,7 @@ function updParts(){
       <span class="prn ${p.id===myId?'me':''}">${esc(p.name)}${p.isAdmin?' 👑':(p.id===myId?' · você':'')}</span>
       <span class="prmic ${speaking[p.id]?'spk':'mut'}" id="mic-${p.id}">${p.listener?'👁️':(speaking[p.id]?'🎤':'🔇')}</span>
       ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">${p.moved?'● Pelo estúdio':'● Poltrona '+String(p.seat+1).padStart(2,'0')+' ocupada'}</small>`:''}
+      ${!p.listener?`<meter id="level-${p.id}" min="0" max="100" value="0" aria-label="Volume de ${esc(p.name)}"></meter>`:''}
       ${adminParticipantControls(p)}
     </div>`).join('');
   document.getElementById('plist').innerHTML=html;
@@ -1420,5 +1425,6 @@ if('serviceWorker' in navigator){
 <script src="/tus.min.js"></script>
 <script src="/episodes.js"></script>
 <script src="/admin.js"></script>
+<script src="/experience.js"></script>
 </body>
 </html>

@@ -20,7 +20,7 @@ Em **Environment**, adicione as variáveis abaixo e escolha **Save, rebuild & de
 
 Não compartilhe nem coloque as chaves no código, em prints ou no chat. A chave secreta fica apenas no servidor. O frontend recebe autorizações temporárias específicas para upload e reprodução. Nunca use a chave de outro projeto.
 
-O projeto **PodPai**, região São Paulo, foi criado no plano Free. O bucket `podpai-episodes` é privado, aceita WebM/MP4 de áudio ou vídeo e limita cada arquivo a 45 MiB, abaixo do teto de 50 MB do Free. Não há políticas públicas de leitura ou escrita. Os replays são acessíveis somente após autenticação de administrador. Não são necessárias tabelas adicionais: a lista usa os objetos concluídos do Storage.
+O projeto **PodPai**, região São Paulo, foi criado no plano Free. O bucket `podpai-episodes` é privado, aceita WebM/MP4 de áudio ou vídeo e limita cada arquivo a 45 MiB, abaixo do teto de 50 MB do Free. Não há políticas públicas de leitura ou escrita. Os replays são acessíveis somente após autenticação de administrador. As tabelas privadas podpai_episodes e podpai_episode_parts guardam títulos e duração. O esquema está em episode-schema.sql e já foi aplicado ao projeto PodPai. RLS sem políticas públicas é intencional: somente o servidor autenticado acessa esses dados.
 
 ## Sala e administração
 
@@ -40,7 +40,7 @@ O navegador captura o canvas em 1280×720 a até 24 fps e envia partes independe
 
 Mantenha a aba do administrador aberta e visível, com internet, até aparecer **salva no Supabase** em todas as partes. Bloquear o aparelho, fechar a aba ou suspender o navegador pode interromper a captura. A gravação não continua no servidor quando o administrador sai. O upload usa TUS, com tentativas automáticas; em falha, há **Tentar envio novamente** e **Baixar cópia** como recuperação. Partes pendentes ficam temporariamente na memória dessa aba e não sobrevivem ao fechamento. Com quatro partes pendentes, a captura para para evitar acumular memória.
 
-Em **Episódios gravados**, abra uma parte para assistir. A próxima parte carregada do mesmo episódio toca automaticamente. **Carregar mais** traz partes antigas. Links de reprodução expiram em uma hora; clique novamente no episódio para renovar. Replays não são publicados automaticamente nem ficam acessíveis sem a senha administrativa.
+Em **Episódios gravados**, edite o título e clique em **Reproduzir episódio**. Todas as partes são carregadas e reproduzidas em sequência; uma parte ausente interrompe a sequência com aviso. Gravações antigas podem não ter duração disponível. **Carregar mais** traz episódios antigos. Links de reprodução expiram em uma hora; clique novamente no episódio para renovar. Replays não são publicados automaticamente nem ficam acessíveis sem a senha administrativa.
 
 ## Verificação local
 
@@ -51,3 +51,11 @@ Em **Episódios gravados**, abra uma parte para assistir. A próxima parte carre
 Antes do primeiro episódio real, faça uma gravação curta após configurar o Render e confirme o replay no Supabase.
 
 Para recuperar uma cópia baixada após falha, entre em **Administrar → Enviar gravação salva** e selecione o WebM/MP4 de até 45 MB. O nome original da cópia preserva a identificação do episódio e da parte. Aguarde a confirmação antes de fechar a aba.
+
+## Novos controles do estúdio
+
+Clique em uma poltrona livre ou escolha o número e use **Sentar**. **Levantar**, WASD, setas ou joystick liberam o lugar. A ocupação é confirmada pelo servidor.
+
+**Pedir a palavra** entra na fila do painel do apresentador. O administrador pode liberar o microfone solicitado, silenciar todos os participantes ou moderar individualmente. Liberar não ativa o microfone automaticamente. O halo e o medidor acompanham áudio detectado, não apenas o estado do botão.
+
+No celular, joystick, microfone e chat ficam abaixo da área do estúdio.

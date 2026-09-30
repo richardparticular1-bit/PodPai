@@ -2,7 +2,7 @@
 let isAdmin=false,removedFromRoom=false,roomRecording=null,pendingRemoval=null;
 let recorder=null,recordDestination=null,recordCompressor=null,recordStreams=new Map();
 let recordChunks=[],recordBytes=0,recordTimer=null,recordPending=false,recordTracks=[];
-let recordingCanvas=null;
+let recordingCanvas=null,partStarted=0,episodeTitle="";
 let recordStarting=false,recordRotating=false,partTimer=null,recordEpisode=null,recordPart=0;
 const recordingLimit=40*1024*1024;
 const adminFeedback=document.getElementById('admin-feedback');
@@ -151,7 +151,7 @@ async function toggleRecording(){
     const formats=mode==='video'?['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4']:['audio/webm;codecs=opus','audio/webm','audio/mp4'];
     const mimeType=formats.find(type=>MediaRecorder.isTypeSupported(type));
     recorder=new MediaRecorder(media,{...(mimeType?{mimeType}:{}),videoBitsPerSecond:600000,audioBitsPerSecond:96000});
-    recordEpisode=Date.now()+'_'+crypto.randomUUID();recordPart=0;
+    recordEpisode=Date.now()+'_'+crypto.randomUUID();recordPart=0;episodeTitle=document.getElementById('episode-title').value.trim();
     recordChunks=[];recordBytes=0;
     recorder.ondataavailable=e=>{
       if(e.data.size){recordChunks.push(e.data);recordBytes+=e.data.size;}
@@ -164,7 +164,7 @@ async function toggleRecording(){
       clearTimeout(partTimer);
       const blob=new Blob(recordChunks,{type:outputType});
       recordChunks=[];recordBytes=0;
-      if(blob.size)saveEpisodePart(blob,recordEpisode,++recordPart);
+      if(blob.size)saveEpisodePart(blob,recordEpisode,++recordPart,(performance.now()-partStarted)/1000,episodeTitle);
       else recordFeedback.textContent='Esta parte terminou sem dados.';
       if(recordRotating&&connected()&&isAdmin&&unsavedParts<4){
         recordRotating=false;
@@ -188,7 +188,7 @@ function recordingPaintFrame(){
   context.drawImage(canvas,(1280-w)/2,(720-h)/2,w,h);
 }
 function startRecordingPart(){
-  recorder.start(1000);partTimer=setTimeout(rotateRecordingPart,4*60*1000);updateRecordButton();
+  partStarted=performance.now();recorder.start(1000);partTimer=setTimeout(rotateRecordingPart,4*60*1000);updateRecordButton();
 }
 function rotateRecordingPart(){
   if(recorder?.state!=='recording')return;

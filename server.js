@@ -39,6 +39,7 @@ const server = http.createServer((req, res) => {
     '/sw.js':       'sw.js',
     '/admin.js':    'admin.js',
     '/movement.js': 'movement.js',
+    '/experience.js': 'experience.js',
     '/episodes.js': 'episodes.js',
     '/tus.min.js': 'node_modules/tus-js-client/dist/tus.min.js',
     '/icon-192.png':'icon-192.png',
@@ -54,7 +55,7 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(fileName);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
+    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','experience.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
   });
   fs.createReadStream(filePath).pipe(res);
 });
@@ -66,7 +67,7 @@ const removedIds = new Set();
 const authFailures = new Map();
 const adminPassword = process.env.ADMIN_PASSWORD || '';
 let recording = null;
-const snapshot = (id,c) => ({id,name:c.name,avatar:c.avatar,color:c.color,seat:c.seat,wx:c.wx,wy:c.wy,moved:c.moved,listener:c.listener,isAdmin:c.isAdmin,adminMuted:c.adminMuted});
+const snapshot = (id,c) => ({id,name:c.name,avatar:c.avatar,color:c.color,seat:c.seat,wx:c.wx,wy:c.wy,moved:c.moved,handRaisedAt:c.handRaisedAt||null,listener:c.listener,isAdmin:c.isAdmin,adminMuted:c.adminMuted});
 function recordingState(){return {type:'recording_state',recording};}
 function endRecording(id){if(recording?.by===id){recording=null;broadcast(recordingState());}}
 
@@ -90,9 +91,9 @@ wss.on('connection', (ws,req) => {
       if(myId)return;
       if(typeof msg.id!=='string'||!/^[-a-zA-Z0-9_]{1,80}$/.test(msg.id)||clients.has(msg.id)){ws.close(1008,'Invalid or duplicate identity');return;}
       if(removedIds.has(msg.id)){send(ws,{type:'removed',message:'Você foi removido desta sessão.'});ws.close(4003,'Removed');return;}
-      const occupied=new Set([...clients.values()].map(c=>c.seat));
+      const occupied=new Set([...clients.values()].filter(c=>!c.moved).map(c=>c.seat));
       const seat=msg.listener===true?null:Array.from({length:8},(_,i)=>i).find(i=>!occupied.has(i));
-      if(msg.listener!==true&&seat===undefined){send(ws,{type:"room_full",message:"As 8 poltronas estão ocupadas. Entre como ouvinte."});ws.close(1008,"Room full");return;}
+      if(msg.listener!==true&&[...clients.values()].filter(c=>!c.listener).length>=8){send(ws,{type:"room_full",message:"As 8 poltronas estão ocupadas. Entre como ouvinte."});ws.close(1008,"Room full");return;}
       myId = msg.id;
       clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:0,wy:0,moved:false,listener:msg.listener===true,isAdmin:false,adminMuted:false});
       const existing = [...clients.entries()]
@@ -132,9 +133,17 @@ wss.on('connection', (ws,req) => {
     }
     else if(msg.type==='admin_action'){
       if(!clients.get(myId).isAdmin){reject('Esta ação exige acesso de administrador.');return;}
+      if(msg.action==='mute_all'){
+        for(const [id,c] of clients)if(!c.isAdmin&&!c.listener){c.adminMuted=true;broadcast({type:'participant_moderation',id,adminMuted:true});}
+        return;
+      }
       const target=clients.get(msg.target);
       if(!target||msg.target===myId||target.isAdmin){reject('Selecione outro participante que não seja administrador.');return;}
-      if(msg.action==='mute'||msg.action==='unmute'){
+      if(msg.action==='approve'){
+        target.handRaisedAt=null;target.adminMuted=false;
+        broadcast({type:'hand_state',id:msg.target,handRaisedAt:null});
+        broadcast({type:'participant_moderation',id:msg.target,adminMuted:false});
+      }else if(msg.action==='mute'||msg.action==='unmute'){
         target.adminMuted=msg.action==='mute';
         broadcast({type:'participant_moderation',id:msg.target,adminMuted:target.adminMuted});
       }else if(msg.action==='remove'){
@@ -153,6 +162,23 @@ wss.on('connection', (ws,req) => {
     else if(msg.type==='recording_stop'){
       if(recording?.by!==myId){reject('Somente quem iniciou pode encerrar a gravação.');return;}
       endRecording(myId);
+    }
+    else if(msg.type==='hand_raise'){
+      const c=clients.get(myId);if(c.listener)return;
+      c.handRaisedAt=msg.raised?(c.handRaisedAt||Date.now()):null;
+      broadcast({type:'hand_state',id:myId,handRaisedAt:c.handRaisedAt});
+    }
+    else if(msg.type==='sit'||msg.type==='stand'){
+      const c=clients.get(myId);if(c.listener)return;
+      if(msg.type==='sit'){
+        if(!Number.isInteger(msg.seat)||msg.seat<0||msg.seat>7)return;
+        if([...clients.entries()].some(([id,p])=>id!==myId&&!p.listener&&!p.moved&&p.seat===msg.seat)){reject('Esta poltrona já está ocupada.');return;}
+        c.seat=msg.seat;c.moved=false;
+      }else{
+        const chairs=[[.5,.36],[.31,.43],[.69,.43],[.33,.72],[.67,.72],[.5,.79],[.17,.60],[.83,.60]];
+        if(!c.moved){[c.wx,c.wy]=chairs[c.seat];c.moved=true;}
+      }
+      broadcast({type:'seat_state',...snapshot(myId,c)});
     }
     else if(msg.type==='move'){
       const c=clients.get(myId);

@@ -45,8 +45,11 @@ const media=http.createServer(async(req,res)=>{
 const storagePath=require.resolve('../episode-storage');
 require.cache[storagePath]={id:storagePath,filename:storagePath,loaded:true,exports:{createEpisodeStorage:()=>({request:async(action,input)=>{
   if(action==='status')return{ready:true};
+  if(action==='complete'){Object.assign(objects.get(input.path),{duration:input.duration,title:input.title});return{saved:true};}
+  if(action==='rename'){for(const o of objects.values())if(o.name.includes(input.episode))o.title=input.title;return{saved:true};}
+  if(action==='episode')return{items:[...objects.values()].filter(o=>o.name.includes(input.episode)).map(o=>({path:o.name,name:o.name.slice(9),part:Number(o.name.match(/_part(\d+)/)[1])})).sort((a,b)=>a.part-b.part)};
   if(action==='upload')return{endpoint:'http://localhost:3004/upload',token:'fixture-only',bucket:'fixture',path:`episodes/${input.episode}_part${String(input.part).padStart(4,'0')}_${require('crypto').randomUUID()}.webm`};
-  if(action==='list')return{items:[...objects.values()].map(o=>({path:o.name,name:o.name.slice(9),size:o.bytes.length})),nextOffset:null};
+  if(action==='list')return{items:[...objects.values()].map(o=>({path:o.name,name:o.name.slice(9),size:o.bytes.length,title:o.title,duration:o.duration})),nextOffset:null};
   if(action==='play')return{url:'http://localhost:3004/'+input.path};
 }})}};
 const original=fs.createReadStream;
@@ -56,7 +59,7 @@ fs.createReadStream=function(file,...args){
     html=html.replace('</body>',`<script>
       initMic=async function(){
         const ac=getAC(),dest=ac.createMediaStreamDestination(),tone=ac.createOscillator();tone.frequency.value=440;tone.connect(dest);tone.start();localStream=dest.stream;
-        localStream.getAudioTracks().forEach(t=>t.enabled=false);isMuted=true;updMicUI();return true;
+        localStream.getAudioTracks().forEach(t=>t.enabled=false);isMuted=true;updMicUI();const an=ac.createAnalyser();an.fftSize=256;ac.createMediaStreamSource(localStream).connect(an);analysers[myId]=an;recordingAttach(myId,localStream);return true;
       };
       const testButton=document.createElement('button');testButton.textContent='TESTE: tom remoto';testButton.style.cssText='position:fixed;bottom:0;right:0;z-index:1000';testButton.onclick=()=>{
         const ac=getAC(),dest=ac.createMediaStreamDestination(),tone=ac.createOscillator();tone.frequency.value=880;tone.connect(dest);tone.start();playAudio('fixture-remote',dest.stream);testButton.remove();

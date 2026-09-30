@@ -31,11 +31,52 @@ function createEpisodeStorage(env=process.env, clientFactory=createClient){
       // expects a user JWT and rejects this flow with "Invalid Compact JWS".
       return {path,token:data.token,bucket,endpoint:endpoint.origin+'/storage/v1/upload/resumable/sign'};
     }
+    if(['rename','complete','episode'].includes(action)){
+      const episode=action==='complete'?String(input.path||'').slice(9).split('_part')[0]:input.episode;
+      if(!/^[0-9]{13}_[a-f0-9-]{36}$/.test(episode||''))throw new Error('Episódio inválido.');
+      if(action==='episode'){
+        let files=[],offset=0;
+        while(true){const {data,error}=await store.list('episodes',{search:episode+'_part',limit:100,offset,sortBy:{column:'name',order:'asc'}});if(error)throw new Error('Não foi possível carregar o episódio.');files.push(...data);if(data.length<100)break;offset+=100;if(offset>20000)throw new Error('Episódio muito grande.');}
+        const unique=new Map();for(const f of files)if(PATH.test('episodes/'+f.name)&&f.name.startsWith(episode+'_part')){const part=Number(f.name.match(/_part(\d+)/)[1]);unique.set(part,{name:f.name,path:'episodes/'+f.name,part});}
+        return {items:[...unique.values()].sort((a,b)=>a.part-b.part)};
+      }
+      const title=String(input.title||'Episódio '+new Date(Number(episode.slice(0,13))).toLocaleString('pt-BR')).trim().slice(0,120);
+      if(!title)throw new Error('Informe um título.');
+      if(action==='complete'){
+        if(!PATH.test(input.path||''))throw new Error('Parte inválida.');
+        const {error}=await store.info(input.path);if(error)throw new Error('Arquivo ainda não encontrado no armazenamento.');
+      }
+      const {error}=await client.from('podpai_episodes').upsert({id:episode,title},{onConflict:'id',ignoreDuplicates:action==='complete'});
+      if(error)throw new Error('Não foi possível salvar o título.');
+      if(action==='complete'){
+        const duration=Number.isFinite(input.duration)&&input.duration>=0&&input.duration<=86400?input.duration:null;
+        const {error}=await client.from('podpai_episode_parts').upsert({path:input.path,episode_id:episode,duration_seconds:duration},{onConflict:'path'});
+        if(error)throw new Error('Não foi possível salvar a duração.');
+      }
+      return {saved:true};
+    }
     if(action==='list'){
       const offset=Number.isInteger(input.offset)&&input.offset>=0?Math.min(input.offset,100000):0;
       const {data,error}=await store.list('episodes',{limit:50,offset,sortBy:{column:'name',order:'desc'}});
       if(error)throw new Error('Não foi possível carregar os replays.');
-      return {items:data.filter(f=>PATH.test('episodes/'+f.name)).map(f=>({path:'episodes/'+f.name,name:f.name,size:f.metadata?.size||0,createdAt:f.created_at})),nextOffset:data.length===50?offset+50:null};
+      // Finish the final episode before the next page, so its displayed duration is complete.
+      let nextOffset=data.length===50?offset+50:null;
+      if(nextOffset!==null){
+        const lastEpisode=data[data.length-1].name.split('_part')[0];
+        while(true){
+          const page=await store.list('episodes',{limit:100,offset:nextOffset,sortBy:{column:'name',order:'desc'}});
+          if(page.error)throw new Error('Não foi possível carregar as partes.');
+          const tail=page.data.filter(f=>f.name.split('_part')[0]===lastEpisode);data.push(...tail);nextOffset+=tail.length;
+          if(tail.length!==page.data.length)break;
+          if(page.data.length<100){nextOffset=null;break;}
+          if(data.length>20000)throw new Error('Episódio muito grande.');
+        }
+      }
+      const ids=[...new Set(data.map(f=>f.name.split('_part')[0]))];
+      const titles=await client.from('podpai_episodes').select('id,title').in('id',ids);
+      const durations=await client.from('podpai_episode_parts').select('path,duration_seconds').in('episode_id',ids);
+      if(titles.error||durations.error)throw new Error('Não foi possível carregar os detalhes dos episódios.');
+      return {items:data.filter(f=>PATH.test('episodes/'+f.name)).map(f=>({path:'episodes/'+f.name,name:f.name,title:titles.data.find(t=>t.id===f.name.split('_part')[0])?.title,duration:durations.data.find(t=>t.path==='episodes/'+f.name)?.duration_seconds,size:f.metadata?.size||0,createdAt:f.created_at})),nextOffset};
     }
     if(action==='play'){
       if(!PATH.test(input.path||''))throw new Error('Episódio inválido.');

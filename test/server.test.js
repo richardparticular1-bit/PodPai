@@ -39,7 +39,14 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   b.send({type:'chat',from:'admin',text:'hello'});assert.equal((await admin.next('chat')).from,'guest');
   admin.send({type:'recording_start',mode:'video'});assert.equal((await listener.next('recording_state')).recording.mode,'video');
   b.send({type:'recording_stop'});await b.next('admin_error');
-  const late=await connect('late');const lateState=await late.next('room_state');assert.equal(lateState.recording.by,'admin');assert.equal(lateState.self.seat,2);assert.equal(lateState.players.find(p=>p.id==='guest').wx,.9);assert.equal(lateState.players.find(p=>p.id==='guest').moved,true);assert.equal(lateState.players.find(p=>p.id==='listener').moved,false);
+  b.send({type:'sit',seat:0});await b.next('admin_error');
+  b.send({type:'sit',seat:1});assert.equal((await b.next('seat_state')).moved,false);
+  b.send({type:'stand'});assert.equal((await b.next('seat_state')).moved,true);
+  b.send({type:'sit',seat:1});await b.next('seat_state');
+  b.send({type:'hand_raise',raised:true});assert.ok((await b.next('hand_state')).handRaisedAt);
+  admin.send({type:'admin_action',action:'mute_all'});assert.equal((await b.next('participant_moderation')).adminMuted,true);
+  admin.send({type:'admin_action',action:'approve',target:'guest'});assert.equal((await b.next('hand_state')).handRaisedAt,null);assert.equal((await b.next('participant_moderation')).adminMuted,false);
+  const late=await connect('late');const lateState=await late.next('room_state');assert.equal(lateState.recording.by,'admin');assert.equal(lateState.self.seat,2);assert.equal(lateState.players.find(p=>p.id==='guest').wx,.31);assert.equal(lateState.players.find(p=>p.id==='guest').moved,false);assert.equal(lateState.players.find(p=>p.id==='listener').moved,false);
   for(let n=3;n<8;n++){const c=await connect('seat'+n);assert.equal((await c.next('room_state')).self.seat,n);}
   const full=await connect('full');await full.next('room_full');
   admin.send({type:'admin_action',action:'remove',target:'guest'});await b.next('removed');
