@@ -1,6 +1,6 @@
 # PODPAI CAST
 
-Estúdio com oito poltronas sincronizadas, áudio WebRTC, chat expansível e moderação.
+Estúdio com até oito participantes, movimento sincronizado, áudio WebRTC, chat expansível e moderação.
 
 ## Executar
 
@@ -24,7 +24,7 @@ O projeto **PodPai**, região São Paulo, foi criado no plano Free. O bucket `po
 
 ## Sala e administração
 
-- O servidor atribui uma poltrona única a cada participante; todos veem a mesma ocupação. A posição é relativa ao estúdio de cada aparelho. Ao sair, a poltrona é liberada sem deslocar os demais.
+- O servidor atribui uma posição inicial a cada participante. Use WASD, setas ou o joystick para andar. A posição é transmitida como proporção do estúdio, com limites para manter o avatar visível em celulares e computadores. Digitar no chat ou abrir diálogos pausa o movimento. Todos os participantes devem atualizar a página após esta mudança de protocolo.
 - Com oito participantes, novas entradas como participante são recusadas; ainda é possível entrar como ouvinte.
 - **Expandir** abre o chat sobre a sala; **Voltar à sala** ou Escape restaura a visão anterior.
 - **Administrar** pede a senha. O nome “Richard” ou um avatar não concede poderes.

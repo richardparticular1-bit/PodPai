@@ -288,7 +288,7 @@ body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:10
 .studio-dialog button,.studio-dialog a{display:inline-block;min-height:40px;padding:10px 14px;margin-top:12px;border:1px solid #b9a0db55;border-radius:8px;background:#49335f;color:white;font-size:13px}
 .studio-dialog .dialog-close{float:right;margin:0;background:transparent}.admin-error{color:#ffb8c7!important}#record-downloads a{display:block;overflow-wrap:anywhere}
 @media(max-width:760px){#topbar-right{flex-wrap:wrap}#recording-notice{font-size:11px}}
-#jzone{display:none!important}
+
 #replay-list{display:grid;gap:8px}#record-downloads>div{padding:12px;border:1px solid #49335d;border-radius:12px;margin:10px 0}#record-downloads a{display:inline-block;margin:8px}#replay-list button{text-align:left}
 [hidden]{display:none!important}
 .seat-status{color:#a2d9be;flex-basis:100%;padding-left:43px;font-size:10px}
@@ -372,7 +372,7 @@ body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:10
   <div id="main">
     <!-- CANVAS -->
     <div id="center">
-      <canvas id="gc" aria-label="Estúdio virtual com os avatares dos participantes"></canvas><div class="room-hint">Poltronas sincronizadas · Reagir: 1–5</div>
+      <canvas id="gc" aria-label="Estúdio virtual com os avatares dos participantes"></canvas><div class="room-hint">Mover: WASD, setas ou joystick · Reagir: 1–5</div>
       <div id="ainds"></div>
       <div id="listener-badge">👁️ Modo Ouvinte</div>
       <div id="jzone"><div id="jbase"><div id="jknob"></div></div></div>
@@ -462,6 +462,7 @@ body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:10
   </div>
 </div>
 
+<script src="/movement.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
 //  PODPAI CAST
@@ -872,14 +873,14 @@ async function onMsg(msg){
     updParts();
   }
   else if(msg.type==='join'){
-    players[msg.from]={id:msg.from,name:msg.name,avatar:msg.avatar,color:msg.color,seat:msg.seat,wx:msg.wx||0,wy:msg.wy||0,moved:false,listener:msg.listener,isAdmin:!!msg.isAdmin,adminMuted:!!msg.adminMuted};
+    players[msg.from]={id:msg.from,name:msg.name,avatar:msg.avatar,color:msg.color,seat:msg.seat,wx:msg.wx||0,wy:msg.wy||0,moved:!!msg.moved,listener:msg.listener,isAdmin:!!msg.isAdmin,adminMuted:!!msg.adminMuted};
     addChat(null,`${msg.name} ${msg.listener?'está ouvindo 👁️':'entrou na sala! 🎙️'}`,'sys');
     updParts();playSound('join');
     // Ouvinte também cria peer com participantes para receber áudio
     if(!msg.listener) await makePeer(msg.from);
   }
   else if(msg.type==='move'){
-    if(players[msg.from])Object.assign(players[msg.from],{wx:msg.wx,wy:msg.wy,moved:true});
+    if(msg.space==='normalized'&&players[msg.from]){const wasMoved=players[msg.from].moved;Object.assign(players[msg.from],{wx:msg.wx,wy:msg.wy,moved:true});if(!wasMoved)updParts();}
   }
   else if(msg.type==='chat'){
     const p=players[msg.from];if(!p)return;
@@ -928,7 +929,8 @@ document.fonts.ready.then(()=>{studioDirty=true;});
 const CHAIRS=[[.5,.36],[.31,.43],[.69,.43],[.33,.72],[.67,.72],[.5,.79],[.17,.60],[.83,.60]];
 function getChair(pid){return players[pid]?.seat;}
 function ppos(p){
-  const cp=CHAIRS[p.seat]||[.5,.5];return{sx:CW*cp[0],sy:CH*cp[1]};
+  const cp=CHAIRS[p.seat]||[.5,.5];
+  const pos=StudioMovement.clamp(p.moved?p.wx:cp[0],p.moved?p.wy:cp[1]);return{sx:CW*pos.x,sy:CH*pos.y};
 }
 function pill(c,x,y,w,h,r,fill,stroke){
   c.beginPath();c.roundRect(x,y,w,h,r);
@@ -1051,7 +1053,7 @@ function drawRoom(){
 }
 function drawChairs(){
   const unit=Math.max(.65,Math.min(CW/900,CH/620,1.3));
-  const occupied=new Set(Object.values(players).filter(p=>!p.listener).map(p=>getChair(p.id)));
+  const occupied=new Set(Object.values(players).filter(p=>!p.listener&&!p.moved).map(p=>getChair(p.id)));
   CHAIRS.forEach((cp,i)=>{
     const x=CW*cp[0],y=CH*cp[1],w=48*unit,h=48*unit;
     ctx.save();ctx.translate(x,y);
@@ -1070,7 +1072,7 @@ function drawChairs(){
 }
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
-  const s=Math.min(CW/390,CH/280,Math.max(.45,Math.min(CW/780,CH/540,1.30)));
+  const s=Math.min(CW/700,CH/360,1.30);
   const talking=!!speaking[p.id]||(isMe&&!isMuted);
   const bob=reducedMotion.matches?0:Math.sin(animT/550+(p.avatar||0))*(talking?1.5:.45);
   ctx.save();ctx.translate(sx,sy);ctx.scale(s,s);
@@ -1079,7 +1081,7 @@ function drawPlayer(p,sx,sy,isMe){
   ctx.translate(0,bob);
   paintAvatar(ctx,p.avatar,p.color);
   // Readable labels stay below the avatar so faces never compete with names.
-  const label=String(p.seat+1).padStart(2,'0')+' · '+p.name+(isMe?' · você':'');ctx.font='800 11px Nunito,sans-serif';
+  const label=(p.moved?'':String(p.seat+1).padStart(2,'0')+' · ')+p.name+(isMe?' · você':'');ctx.font='800 11px Nunito,sans-serif';
   const width=Math.min(132,ctx.measureText(label).width+22);
   pill(ctx,-width/2,14,width,23,11,'#14111fed',talking?'#83d6b5aa':'#b89bc044');
   ctx.fillStyle=isMe?'#e1c5ff':'#eee6f3';ctx.fillText(label,0,29,width-14);
@@ -1138,17 +1140,26 @@ function render(ts){
 }
 
 // ── GAME LOOP ────────────────────────────────────────────────
-let lastBC=0;
+let lastBC=0,lastMovementFrame=0,movementDirty=false;
 function isTyping(){
   const ae=document.activeElement;
-  return ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA');
+  return !!document.querySelector('dialog[open]')||document.getElementById('rpanel').classList.contains('chat-expanded')||(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable));
 }
 
 function gameLoop(ts){
+  const dt=Math.min(0.05,Math.max(0,(ts-lastMovementFrame)/1000));lastMovementFrame=ts;
   if(!running){requestAnimationFrame(gameLoop);return;}
   if(entryMode==='listen'){requestAnimationFrame(gameLoop);return;}
   const me=players[myId];if(!me){requestAnimationFrame(gameLoop);return;}
   tickEnergy(ts);
+  if(Number.isInteger(me.seat)&&!isTyping()){
+    const k=kd(),dx=jdx()+k.x,dy=jdy()+k.y;
+    if(dx||dy){
+      const initial=CHAIRS[me.seat],pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt);
+      const first=!me.moved;Object.assign(me,{wx:pos.x,wy:pos.y,moved:true});movementDirty=true;if(first)updParts();
+    }
+  }
+  if(movementDirty&&ts-lastBC>=65){wsSend({type:'move',space:'normalized',wx:me.wx,wy:me.wy});lastBC=ts;movementDirty=false;}
   requestAnimationFrame(gameLoop);
 }
 
@@ -1161,12 +1172,13 @@ const jknob=document.getElementById('jknob');
 function getJzone(){return document.getElementById('jzone');}
 
 function jStart(e){
-  if(joy.active)return;
+  if(joy.active||document.querySelector('dialog[open]')||document.getElementById('rpanel').classList.contains('chat-expanded')||entryMode==='listen')return;
   const jz=getJzone();
   const r=jz.getBoundingClientRect();
   const t=e.changedTouches?e.changedTouches[0]:e;
   // Só ativa se o toque está dentro do jzone
   if(t.clientX<r.left||t.clientX>r.right||t.clientY<r.top||t.clientY>r.bottom)return;
+  if(document.activeElement?.matches('input,textarea,select'))document.activeElement.blur();
   joy.active=true;joy.id=t.identifier??-1;
   joy.cx=r.left+r.width/2;joy.cy=r.top+r.height/2;
   jUpd(t);
@@ -1197,8 +1209,13 @@ document.addEventListener('mouseup',()=>jEnd());
 function jdx(){return joy.dx;}function jdy(){return joy.dy;}
 
 const keys={};
+function resetMovementInput(){for(const key of Object.keys(keys))delete keys[key];jEnd();}
+window.addEventListener('blur',resetMovementInput);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)resetMovementInput();});
+document.addEventListener('focusin',()=>{if(isTyping())resetMovementInput();});
 document.addEventListener('keydown',e=>{
   if(isTyping())return; // FIX: ignora teclas quando digitando
+  if(e.key.startsWith('Arrow'))e.preventDefault();
   keys[e.key]=true;
   if(['1','2','3','4','5'].includes(e.key))castCard(+e.key-1);
 });
@@ -1268,7 +1285,7 @@ function updParts(){
       <div class="prav">${p.listener?'👁️':`<img src="${AVS[AVATARS.indexOf(avatarSpec(p.avatar))]}" alt="">`}</div>
       <span class="prn ${p.id===myId?'me':''}">${esc(p.name)}${p.isAdmin?' 👑':(p.id===myId?' · você':'')}</span>
       <span class="prmic ${speaking[p.id]?'spk':'mut'}" id="mic-${p.id}">${p.listener?'👁️':(speaking[p.id]?'🎤':'🔇')}</span>
-      ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">● Poltrona ${String(p.seat+1).padStart(2,'0')} ocupada</small>`:''}
+      ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">${p.moved?'● Pelo estúdio':'● Poltrona '+String(p.seat+1).padStart(2,'0')+' ocupada'}</small>`:''}
       ${adminParticipantControls(p)}
     </div>`).join('');
   document.getElementById('plist').innerHTML=html;

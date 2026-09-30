@@ -31,10 +31,15 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   b.send({type:'move',wx:99999,wy:-5000});
   const listener=await connect('listener',true),snapshot=await listener.next('room_state');
   assert.equal(snapshot.self.seat,null);assert.equal(snapshot.players.find(p=>p.id==='guest').seat,1);assert.equal(snapshot.players.find(p=>p.id==='guest').wx,0);
+  b.send({type:'move',space:'normalized',wx:.7,wy:.6});
+  const moved=await listener.next('move');assert.equal(moved.wx,.7);assert.equal(moved.wy,.6);assert.equal(moved.from,'guest');
+  b.send({type:'move',space:'normalized',wx:8,wy:-5});
+  const bounded=await listener.next('move');assert.equal(bounded.wx,.9);assert.equal(bounded.wy,.32);
+  listener.send({type:'move',space:'normalized',wx:.4,wy:.5});
   b.send({type:'chat',from:'admin',text:'hello'});assert.equal((await admin.next('chat')).from,'guest');
   admin.send({type:'recording_start',mode:'video'});assert.equal((await listener.next('recording_state')).recording.mode,'video');
   b.send({type:'recording_stop'});await b.next('admin_error');
-  const late=await connect('late');const lateState=await late.next('room_state');assert.equal(lateState.recording.by,'admin');assert.equal(lateState.self.seat,2);
+  const late=await connect('late');const lateState=await late.next('room_state');assert.equal(lateState.recording.by,'admin');assert.equal(lateState.self.seat,2);assert.equal(lateState.players.find(p=>p.id==='guest').wx,.9);assert.equal(lateState.players.find(p=>p.id==='guest').moved,true);assert.equal(lateState.players.find(p=>p.id==='listener').moved,false);
   for(let n=3;n<8;n++){const c=await connect('seat'+n);assert.equal((await c.next('room_state')).self.seat,n);}
   const full=await connect('full');await full.next('room_full');
   admin.send({type:'admin_action',action:'remove',target:'guest'});await b.next('removed');

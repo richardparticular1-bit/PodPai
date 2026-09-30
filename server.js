@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const movement=require('./movement');
 
 const episodeStorage=require('./episode-storage').createEpisodeStorage();
 
@@ -37,6 +38,7 @@ const server = http.createServer((req, res) => {
     '/manifest.json':'manifest.json',
     '/sw.js':       'sw.js',
     '/admin.js':    'admin.js',
+    '/movement.js': 'movement.js',
     '/episodes.js': 'episodes.js',
     '/tus.min.js': 'node_modules/tus-js-client/dist/tus.min.js',
     '/icon-192.png':'icon-192.png',
@@ -52,7 +54,7 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(fileName);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': ['client.html','admin.js','episodes.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
+    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
   });
   fs.createReadStream(filePath).pipe(res);
 });
@@ -152,7 +154,13 @@ wss.on('connection', (ws,req) => {
       if(recording?.by!==myId){reject('Somente quem iniciou pode encerrar a gravação.');return;}
       endRecording(myId);
     }
-    // Seats are assigned by the server. Legacy movement messages are ignored.
+    else if(msg.type==='move'){
+      const c=clients.get(myId);
+      if(c.listener||msg.space!=='normalized'||!Number.isFinite(msg.wx)||!Number.isFinite(msg.wy))return;
+      const position=movement.clamp(msg.wx,msg.wy);
+      Object.assign(c,{wx:position.x,wy:position.y,moved:true});
+      broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized'},myId);
+    }
     else if (msg.type === 'chat' && myId) {
       if(typeof msg.text!=='string')return;
       broadcast({ type: 'chat', from: myId, text: msg.text.slice(0,500) }, myId);
