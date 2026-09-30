@@ -58,6 +58,22 @@ function saveEpisodePart(blob,episode,part){
   }
   retry.onclick=sendPart;sendPart();
 }
+function importEpisodeFile(file){
+  if(!file)return;
+  const feedback=document.getElementById('record-feedback');
+  if(!isAdmin||!connected()){feedback.textContent='Entre como administrador para enviar a gravação.';return;}
+  if(unsavedParts>=4){feedback.textContent='Conclua os envios pendentes antes de selecionar outro arquivo.';return;}
+  if(file.size<1||file.size>45*1024*1024){feedback.textContent='Selecione uma parte de até 45 MB, nos formatos WebM ou MP4.';return;}
+  const extension=file.name.match(/\.(webm|mp4)$/i)?.[1].toLowerCase();
+  if(!extension){feedback.textContent='Formato não aceito. Selecione a cópia WebM ou MP4 da gravação.';return;}
+  const mime=file.type.split(';')[0];
+  const blob=file.slice(0,file.size,['video/webm','audio/webm','video/mp4','audio/mp4'].includes(mime)?mime:'video/'+extension);
+  const original=file.name.match(/^podpai-([0-9]{13}_[a-f0-9-]{36})-parte-([0-9]{1,4})\.(webm|mp4)$/i);
+  const episode=original?original[1].toLowerCase():Date.now()+'_'+crypto.randomUUID();
+  const part=original?Math.max(1,Number(original[2])):1;
+  feedback.textContent='Enviando a gravação salva. Acompanhe a confirmação abaixo.';
+  saveEpisodePart(blob,episode,part);
+}
 async function loadReplays(append=false){
   const status=document.getElementById('replay-feedback'),generation=++replayGeneration;
   status.textContent='Carregando episódios…';

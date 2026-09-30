@@ -49,3 +49,5 @@ Em **Episódios gravados**, abra uma parte para assistir. A próxima parte carre
 `node test/preview.cjs` abre uma prévia em `http://localhost:3003` com armazenamento TUS simulado em 3004. A senha **exclusiva dessa prévia** é `podpai-local-test`. O microfone é substituído por um tom sintético; **TESTE: tom remoto** cria outro tom. As partes duram oito segundos para testar rotação, envio e replay. `http://localhost:3004/verify` mede as frequências gravadas. Esse fixture não é servido pelo servidor de produção e não acessa o Supabase real.
 
 Antes do primeiro episódio real, faça uma gravação curta após configurar o Render e confirme o replay no Supabase.
+
+Para recuperar uma cópia baixada após falha, entre em **Administrar → Enviar gravação salva** e selecione o WebM/MP4 de até 45 MB. O nome original da cópia preserva a identificação do episódio e da parte. Aguarde a confirmação antes de fechar a aba.

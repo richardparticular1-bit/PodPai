@@ -306,6 +306,8 @@ body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:10
     <label for="record-mode">Gravar episódio</label><select id="record-mode"><option value="audio">Áudio dos participantes</option><option value="video">Vídeo do estúdio + áudio</option></select>
     <p>A sala será avisada. O vídeo do estúdio e o áudio recebido neste navegador serão enviados ao Supabase em partes de até 4 minutos. Mantenha esta aba aberta e visível até concluir os envios.</p>
     <button id="btn-record" type="button" onclick="toggleRecording()">● Iniciar gravação</button>
+    <button type="button" onclick="document.getElementById('saved-recording').click()">Enviar gravação salva</button>
+    <input id="saved-recording" type="file" accept=".webm,.mp4,audio/webm,video/webm,audio/mp4,video/mp4" hidden onchange="importEpisodeFile(this.files[0]);this.value=''">
     <p id="record-feedback" role="status"></p>
   </section>
   <div id="record-downloads" aria-live="polite"></div>
