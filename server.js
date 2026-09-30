@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const movement=require('./movement');
+const studioMotion=require('./studio-motion');
 
 const episodeStorage=require('./episode-storage').createEpisodeStorage();
 
@@ -39,6 +40,7 @@ const server = http.createServer((req, res) => {
     '/sw.js':       'sw.js',
     '/admin.js':    'admin.js',
     '/movement.js': 'movement.js',
+    '/studio-motion.js': 'studio-motion.js',
     '/experience.js': 'experience.js',
     '/episodes.js': 'episodes.js',
     '/tus.min.js': 'node_modules/tus-js-client/dist/tus.min.js',
@@ -55,7 +57,7 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(fileName);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','experience.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
+    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','studio-motion.js','experience.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
   });
   fs.createReadStream(filePath).pipe(res);
 });
@@ -94,8 +96,9 @@ wss.on('connection', (ws,req) => {
       const occupied=new Set([...clients.values()].filter(c=>!c.moved).map(c=>c.seat));
       const seat=msg.listener===true?null:Array.from({length:8},(_,i)=>i).find(i=>!occupied.has(i));
       if(msg.listener!==true&&[...clients.values()].filter(c=>!c.listener).length>=8){send(ws,{type:"room_full",message:"As 8 poltronas estão ocupadas. Entre como ouvinte."});ws.close(1008,"Room full");return;}
+      const entry=studioMotion.spawn([...clients.values()]);
       myId = msg.id;
-      clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:.175,wy:.35,moved:msg.listener!==true,listener:msg.listener===true,isAdmin:false,adminMuted:false});
+      clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:entry.x,wy:entry.y,moved:msg.listener!==true,listener:msg.listener===true,isAdmin:false,adminMuted:false});
       const existing = [...clients.entries()]
         .filter(([id]) => id !== myId)
         .map(([id, c]) => snapshot(id,c));

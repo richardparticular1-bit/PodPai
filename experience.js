@@ -5,16 +5,16 @@ document.getElementById('bottom').before(dock);dock.prepend(document.getElementB
 document.getElementById('mobile-mic').onclick=()=>toggleMic();
 document.getElementById('mobile-chat').onclick=()=>document.getElementById('btn-panel').click();
 let seatingPending=false;
-function requestSeat(message){if(seatingPending||!connected())return;seatingPending=true;movementDirty=false;joy.active=false;joy.dx=0;joy.dy=0;Object.keys(keys).forEach(k=>keys[k]=false);wsSend(message);}
+function requestSeat(message){cancelWalk();if(seatingPending||!connected())return;seatingPending=true;movementDirty=false;joy.active=false;joy.dx=0;joy.dy=0;Object.keys(keys).forEach(k=>keys[k]=false);wsSend(message);}
 document.getElementById('stand-button').onclick=()=>requestSeat({type:'stand'});
-document.getElementById('sit-button').onclick=()=>requestSeat({type:'sit',seat:Number(document.getElementById('seat-choice').value)});
+document.getElementById('sit-button').onclick=()=>walkToChair(Number(document.getElementById('seat-choice').value));
 document.getElementById('raise-button').onclick=()=>wsSend({type:'hand_raise',raised:!players[myId]?.handRaisedAt});
 canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
   const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
   if(x>.115&&x<.235&&y>.07&&y<.32){exitThroughDoor();return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
-  if(seat>=0)requestSeat({type:'sit',seat});
+  if(seat>=0)walkToChair(seat);else if(y>=.30)startWalk({x,y});
 });
 const host=document.createElement('section');host.id='host-controls';
 host.innerHTML='<h2>Painel do apresentador</h2><button type="button" id="mute-all">Silenciar participantes</button><h3>Pedidos de palavra</h3><div id="hand-queue"></div><h3>Participantes</h3><div id="host-participants"></div>';
@@ -39,13 +39,14 @@ function refreshExperience(){
  const raise=document.getElementById('raise-button');raise.disabled=!me||me.listener;raise.textContent=me?.handRaisedAt?'✋ Cancelar pedido':'✋ Pedir a palavra';raise.setAttribute('aria-pressed',!!me?.handRaisedAt);
  document.getElementById('host-participants').innerHTML=Object.values(players).map(p=>'<div class="host-person"><strong>'+esc(p.name)+'</strong>'+adminParticipantControls(p)+'</div>').join('');
  const queue=Object.values(players).filter(p=>p.handRaisedAt).sort((a,b)=>a.handRaisedAt-b.handRaisedAt);
+ if(isAdmin)document.getElementById('btn-admin').textContent='👑 Administrar'+(queue.length?' · ✋ '+queue.length:'');
  document.getElementById('hand-queue').innerHTML=queue.length?queue.map(p=>'<div class="host-person">✋ '+esc(p.name)+(p.isAdmin?'':' <button type="button" data-admin-action="approve" data-target="'+p.id+'">Liberar palavra</button>')+'</div>').join(''):'Nenhum pedido pendente.';
 }
 const originalAdminMessage=handleAdminMessage;
 handleAdminMessage=function(msg){
- if(msg.type==='admin_error'||msg.type==='room_state')seatingPending=false;
+ if(msg.type==='admin_error'||msg.type==='room_state'){seatingPending=false;cancelWalk();}
  if(msg.type==='seat_state'){if(players[msg.id])Object.assign(players[msg.id],msg);if(msg.id===myId){seatingPending=false;movementDirty=false;joy.active=false;joy.dx=0;joy.dy=0;Object.keys(keys).forEach(k=>keys[k]=false);}updParts();return true;}
- if(msg.type==='hand_state'){if(players[msg.id])players[msg.id].handRaisedAt=msg.handRaisedAt;updParts();return true;}
+ if(msg.type==='hand_state'){if(isAdmin&&msg.handRaisedAt&&!players[msg.id]?.handRaisedAt){showToast((players[msg.id]?.name||'Participante')+' pediu a palavra ✋');}if(players[msg.id])players[msg.id].handRaisedAt=msg.handRaisedAt;updParts();return true;}
  return originalAdminMessage(msg);
 };
 const style=document.createElement('style');style.textContent=`
@@ -77,3 +78,47 @@ style.textContent+=`
 #pwrap{min-height:150px;max-height:34%}
 @media(max-width:760px){#bottom #rbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;width:100%;overflow:visible}#bottom .rb{min-width:0;width:100%;padding:5px 2px;flex-direction:column;gap:2px;min-height:44px}#bottom .rb span{font-size:9px;white-space:nowrap}#pwrap{min-height:138px;max-height:32%}.movement-controls{min-width:0}.movement-controls select{min-width:0;flex:1}}
 `;
+
+// A tap selects a route; keyboard and joystick always take precedence.
+let walkPlan=null;
+function cancelWalk(){walkPlan=null;}
+function startWalk(target,seat=null){
+ const me=players[myId];if(!me||me.listener||!connected()||seatingPending)return;
+ document.activeElement?.blur();resetMovementInput();
+ const route=StudioMotion.route(StudioMotion.point(me),target);
+ if(!route.length){showToast('Escolha outro ponto no chão.');return;}
+ walkPlan={route,seat};
+}
+function walkToChair(seat){
+ if(!Number.isInteger(seat)||!CHAIRS[seat])return;
+ if(Object.values(players).some(p=>p.id!==myId&&!p.listener&&!p.moved&&p.seat===seat)){showToast('Esta poltrona está ocupada.');return;}
+ startWalk({x:CHAIRS[seat][0],y:CHAIRS[seat][1]},seat);
+}
+function advanceWalk(me,dt){
+ if(!walkPlan)return;
+ const plan=walkPlan,next=StudioMotion.toward(StudioMotion.point(me),plan.route[0],dt),first=!me.moved;
+ Object.assign(me,{wx:next.x,wy:next.y,moved:true});movementDirty=true;if(first)updParts();
+ if(next.arrived){plan.route.shift();if(!plan.route.length){walkPlan=null;
+   wsSend({type:'move',space:'normalized',wx:me.wx,wy:me.wy});movementDirty=false;
+   if(plan.seat!==null)requestSeat({type:'sit',seat:plan.seat});
+ }}
+}
+window.addEventListener('blur',cancelWalk);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelWalk();});
+const originalResetInput=resetMovementInput;resetMovementInput=function(){originalResetInput();cancelWalk();};
+const audioLabels={new:'Conectando áudio…',connecting:'Conectando áudio…',connected:'Áudio conectado',disconnected:'Áudio interrompido',reconnecting:'Reconectando áudio…',failed:'Falha no áudio',closed:'Áudio desconectado',blocked:'Toque para ouvir'};
+function refreshAudioLabels(){
+ for(const p of Object.values(players)){
+   const el=document.getElementById('audio-state-'+p.id);if(!el)continue;
+   const state=p.id===myId?'self':audioStates[p.id]||peers[p.id]?.connectionState||'new';
+   const text=p.listener?'Ouvinte':p.id===myId?(localStream?(isMuted?'Seu microfone desligado':'Seu microfone ligado'):'Sem acesso ao microfone'):audioLabels[state]||'Conectando áudio…';
+   if(el.textContent!==text)el.textContent=text;
+   el.dataset.state=state;el.setAttribute('aria-label',p.name+': '+text);
+ }
+}
+setInterval(refreshAudioLabels,500);
+document.getElementById('plist').addEventListener('click',e=>{
+ const button=e.target.closest('[data-audio-resume]');if(!button)return;
+ document.getElementById('aud-'+button.dataset.audioResume)?.play().then(()=>{audioStates[button.dataset.audioResume]='connected';refreshAudioLabels();}).catch(()=>showToast('O navegador ainda não conseguiu reproduzir o áudio.'));
+});
+style.textContent+='.audio-state{background:transparent;border:0;text-align:left;padding-top:0;padding-bottom:0;font-size:10px;color:#b5a6c6;flex-basis:100%;padding-left:40px}.audio-state[data-state="connected"]{color:#a6d9bd}.audio-state[data-state="failed"],.audio-state[data-state="disconnected"]{color:#edba92}';

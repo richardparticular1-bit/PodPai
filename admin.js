@@ -181,12 +181,20 @@ async function toggleRecording(){
   finally{recordStarting=false;updateRecordButton();}
 }
 function recordingPaintFrame(){
-  if(!recordingCanvas||!canvas.width||!canvas.height)return;
-  const context=recordingCanvas.getContext('2d'),scale=Math.min(1280/canvas.width,720/canvas.height);
-  context.fillStyle='#0c0913';context.fillRect(0,0,1280,720);
-  const w=canvas.width*scale,h=canvas.height*scale;
-  context.drawImage(canvas,(1280-w)/2,(720-h)/2,w,h);
+  if(!recordingCanvas)return;
+  const saved={ctx,CW,CH},context=recordingCanvas.getContext('2d');
+  context.save();
+  try{
+    ctx=context;CW=1280;CH=680;
+    context.setTransform(1,0,0,1,0,40);context.clearRect(0,-40,1280,720);
+    paintStudio(context);drawStudioDoor();drawChairs();
+    Object.values(players).filter(p=>!p.listener&&Number.isInteger(p.seat)).sort((a,b)=>ppos(a).sy-ppos(b).sy).forEach(p=>{const pos=ppos(p);drawPlayer(p,pos.sx,pos.sy,false);});
+    context.setTransform(1,0,0,1,0,0);context.fillStyle='#100c19';context.fillRect(0,0,1280,40);
+    context.fillStyle='#eee3ff';context.textAlign='left';context.font='700 19px Nunito,sans-serif';context.fillText(episodeTitle||'PodPai · Conversa no estúdio',24,27,1100);
+    context.textAlign='right';context.fillStyle='#a6e5c6';context.font='700 13px Nunito,sans-serif';context.fillText('PODPAI CAST',1256,26);
+  }finally{ctx=saved.ctx;CW=saved.CW;CH=saved.CH;context.restore();}
 }
+
 function startRecordingPart(){
   partStarted=performance.now();recorder.start(1000);partTimer=setTimeout(rotateRecordingPart,4*60*1000);updateRecordButton();
 }

@@ -463,6 +463,7 @@ body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:10
 </div>
 
 <script src="/movement.js"></script>
+<script src="/studio-motion.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
 //  PODPAI CAST
@@ -479,7 +480,7 @@ const AVATARS=[
   {name:'Masculino · pele clara, cabelo loiro curto',skin:'#f1cfb4',shade:'#d8aa8d',hair:'#bd9358',style:'short',shirt:'#b296c7'},
 ];
 function avatarSpec(index){return AVATARS[Number.isInteger(index)&&index>=0&&index<AVATARS.length?index:0];}
-function paintAvatar(c,index,color,seated=false){
+function paintAvatar(c,index,color,seated=false,pose={}){
   const a=avatarSpec(index),long=['long','waves','curls'].includes(a.style);
   c.save();
   if(long)pill(c,-24,-76,48,57,19,a.hair);
@@ -491,11 +492,14 @@ function paintAvatar(c,index,color,seated=false){
     pill(c,-21,-5,9,13,4,'#201d2d');pill(c,12,-5,9,13,4,'#201d2d');
     pill(c,-24,5,15,7,3,'#d0bdd1');pill(c,9,5,15,7,3,'#d0bdd1');
   }else{
-    pill(c,-14,-11,11,17,5,'#201d2d');pill(c,3,-11,11,17,5,'#201d2d');
-    pill(c,-17,0,15,7,3,'#d0bdd1');pill(c,2,0,15,7,3,'#d0bdd1');
+    c.save();c.translate(-8,-11);c.rotate(pose.leftLeg||0);pill(c,-6,0,11,17,5,'#201d2d');pill(c,-9,11,15,7,3,'#d0bdd1');c.restore();
+    c.save();c.translate(8,-11);c.rotate(pose.rightLeg||0);pill(c,-5,0,11,17,5,'#201d2d');pill(c,-6,11,15,7,3,'#d0bdd1');c.restore();
+    /* feet are attached to the animated legs */
   }
   const jacket=c.createLinearGradient(-20,-38,20,-5);jacket.addColorStop(0,color||a.shirt);jacket.addColorStop(1,'#423249');
-  pill(c,-19,-37,38,32,12,jacket);pill(c,-24,-32,9,seated?17:24,4,jacket);pill(c,15,-32,9,seated?17:24,4,jacket);if(seated){pill(c,-29,-19,13,7,3,a.skin);pill(c,16,-19,13,7,3,a.skin);}
+  pill(c,-19,-37,38,32,12,jacket);
+  function arm(side,angle){c.save();c.translate(side*19,-30);c.rotate(angle||0);pill(c,-4,-2,8,seated?18:23,4,jacket);pill(c,-4,seated?13:18,9,7,3,a.skin);c.restore();}
+  arm(-1,pose.leftArm);arm(1,pose.rightArm);
   c.strokeStyle='#ffffff35';c.lineWidth=1;c.beginPath();c.moveTo(0,-31);c.lineTo(0,-7);c.stroke();
   pill(c,-5,-44,10,13,4,a.skin);oval(c,-17,-52,4,6,a.skin);oval(c,17,-52,4,6,a.skin);
   const face=c.createLinearGradient(-15,-69,16,-39);face.addColorStop(0,a.skin);face.addColorStop(1,a.shade);
@@ -638,6 +642,7 @@ const ICE={iceServers:[
 ]};
 
 let localStream=null,isMuted=true,peers={},analysers={},speaking={};
+const audioStates={},audioRecoveryTimers={};
 
 async function initMic(){
   try{
@@ -697,7 +702,7 @@ function shouldInitiate(remoteId){return myId>remoteId;}
 async function makePeer(pid){
   if(peers[pid])return peers[pid];
   const pc=new RTCPeerConnection(ICE);
-  peers[pid]=pc;
+  peers[pid]=pc;audioStates[pid]='connecting';
   const initiator=shouldInitiate(pid);
 
   // Adiciona stream local apenas se for participante com mic
@@ -716,7 +721,13 @@ async function makePeer(pid){
   };
 
   pc.onconnectionstatechange=()=>{
-    if(['failed','closed','disconnected'].includes(pc.connectionState)) cleanPeer(pid);
+    if(peers[pid]!==pc)return;
+    audioStates[pid]=pc.connectionState;clearTimeout(audioRecoveryTimers[pid]);
+    if(pc.connectionState==='disconnected'){
+      audioRecoveryTimers[pid]=setTimeout(()=>{if(peers[pid]===pc&&pc.connectionState==='disconnected'&&initiator){audioStates[pid]='reconnecting';pc.restartIce();}},3000);
+    }
+    if(pc.connectionState==='failed'){cleanPeer(pid);audioStates[pid]='failed';}
+    if(typeof refreshAudioLabels==='function')refreshAudioLabels();
   };
 
   // Negotiation needed (só o initiator cria offer)
@@ -774,7 +785,7 @@ function playAudio(pid,stream){
   el.muted=!!players[pid]?.adminMuted;
   recordingAttach(pid,stream);
   // Força play (iOS)
-  el.play().catch(()=>{});
+  el.play().then(()=>{audioStates[pid]='connected';}).catch(()=>{audioStates[pid]='blocked';});
 
   // Analyser para detector de voz
   try{
@@ -787,8 +798,9 @@ function playAudio(pid,stream){
 }
 
 function cleanPeer(pid){
+  clearTimeout(audioRecoveryTimers[pid]);delete audioRecoveryTimers[pid];audioStates[pid]='closed';
   recordingDetach(pid);
-  if(peers[pid]){try{peers[pid].close();}catch{} delete peers[pid];}
+  if(peers[pid]){const pc=peers[pid];delete peers[pid];pc.onconnectionstatechange=null;try{pc.close();}catch{}}
   const el=document.getElementById('aud-'+pid);if(el)el.remove();
   delete analysers[pid];delete speaking[pid];
   updSpeaking(pid,false);
@@ -903,7 +915,7 @@ async function onMsg(msg){
   else if(msg.type==='skill'){
     const p=players[msg.from],c=CARDS[msg.cardId];
     if(p&&c){
-      effects.push({...ppos(p),color:c.color,icon:c.icon,ts:animT});
+      p.reaction=msg.cardId;p.reactionUntil=animT+2200;effects.push({...ppos(p),color:c.color,icon:c.icon,ts:animT});
       addChat(null,`${p.name} ${c.msg}`,'sys');
       playSound(msg.cardId);
     }
@@ -919,7 +931,8 @@ async function onMsg(msg){
 }
 
 // ── CANVAS ───────────────────────────────────────────────────
-const canvas=document.getElementById('gc'),ctx=canvas.getContext('2d');
+const canvas=document.getElementById('gc');
+let ctx=canvas.getContext('2d');
 let CW=0,CH=0;
 // Static scenery is cached; only people, voice indicators and reactions animate.
 const studioLayer=document.createElement('canvas');
@@ -1097,20 +1110,23 @@ function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
   const seated=!p.moved,s=studioAvatarScale()*(seated?.84:1);
   const talking=!!speaking[p.id];
-  const bob=reducedMotion.matches?0:Math.sin(animT/550+(p.avatar||0))*(talking?1.5:.45);
+  const state=avatarMotion.get(p.id),reaction=p.reactionUntil>animT?p.reaction:-1;
+  const pose=StudioMotion.pose({time:animT,phase:state?.phase||0,walking:!!state?.walking,talking,seated,hand:!!p.handRaisedAt,reaction,reduced:reducedMotion.matches});
+  const bob=pose.bob;
   ctx.save();ctx.translate(sx,sy);ctx.scale(s,s);
   oval(ctx,0,5,22,7,'#05081177');
   if(isMe||talking){ctx.beginPath();ctx.ellipse(0,4,26+(talking&&!reducedMotion.matches?Math.sin(animT/150)*2:0),9,0,0,Math.PI*2);ctx.strokeStyle=talking?'#9af1d4':'#bd9affaa';ctx.lineWidth=1.8;ctx.stroke();}
-  ctx.translate(0,bob);
+  ctx.translate(0,bob);ctx.rotate(pose.lean);ctx.textAlign="center";
   if(seated){
     // Draw the occupied armchair at avatar scale so the back and arms are never hidden.
     pill(ctx,-34,-61,68,62,13,'#584561','#bca1c477');
     pill(ctx,-28,-55,56,41,10,'#6b5275','#c9afcf44');
     pill(ctx,-35,-9,70,16,7,'#45364e','#a68aac66');
     [-1,1].forEach(dir=>pill(ctx,dir*27-3,4,6,12,2,'#322a3d'));
-    ctx.save();ctx.translate(0,-3);paintAvatar(ctx,p.avatar,p.color,true);ctx.restore();
+    ctx.save();ctx.translate(0,-3);paintAvatar(ctx,p.avatar,p.color,true,pose);ctx.restore();
     [-1,1].forEach(dir=>pill(ctx,dir*33-5,-24,10,29,5,'#765980','#c6a9ce77'));
-  }else paintAvatar(ctx,p.avatar,p.color);
+  }else paintAvatar(ctx,p.avatar,p.color,false,pose);
+  if(p.handRaisedAt){pill(ctx,25,-99,24,23,8,'#443426','#edc676');ctx.font='16px serif';ctx.fillText('✋',37,-82);}
   // Readable labels stay below the avatar so faces never compete with names.
   const label=(p.moved?'':String(p.seat+1).padStart(2,'0')+' · ')+p.name+(isMe?' · você':'');ctx.font='800 11px Nunito,sans-serif';
   const width=Math.min(132,ctx.measureText(label).width+22);
@@ -1159,10 +1175,20 @@ function drawEffects(ts){
   });
 }
 
+const avatarMotion=new Map();
+function updateAvatarMotion(ts){
+  for(const id of avatarMotion.keys())if(!players[id])avatarMotion.delete(id);
+  for(const p of Object.values(players)){
+    const pos=StudioMotion.point(p),old=avatarMotion.get(p.id),distance=old?Math.hypot((pos.x-old.x)*900,(pos.y-old.y)*620):0;
+    const lastMove=distance>.01?ts:old?.lastMove||0;
+    avatarMotion.set(p.id,{...pos,phase:(old?.phase||0)+distance/14,lastMove,walking:p.moved&&ts-lastMove<140});
+  }
+}
 function render(ts){
-  if(!running)return;animT=ts;resize();
+  if(!running)return;animT=ts;resize();updateAvatarMotion(ts);
   ctx.clearRect(0,0,CW,CH);
   drawRoom();drawChairs();
+  if(typeof walkPlan!=='undefined'&&walkPlan?.route.length){const target=walkPlan.route[walkPlan.route.length-1];ctx.save();ctx.strokeStyle='#bca2ed';ctx.lineWidth=2;ctx.setLineDash([3,4]);ctx.beginPath();ctx.ellipse(target.x*CW,target.y*CH,12,5,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
   Object.values(players).filter(p=>!p.listener&&Number.isInteger(p.seat)).sort((a,b)=>ppos(a).sy-ppos(b).sy).forEach(p=>{
     const{sx,sy}=ppos(p);drawPlayer(p,sx,sy,p.id===myId);
   });
@@ -1185,10 +1211,11 @@ function gameLoop(ts){
   tickEnergy(ts);
   if(Number.isInteger(me.seat)&&!(typeof seatingPending!=='undefined'&&seatingPending)&&!isTyping()){
     const k=kd(),dx=jdx()+k.x,dy=jdy()+k.y;
+    if((dx||dy)&&typeof cancelWalk==='function')cancelWalk();
     if(dx||dy){
       const initial=CHAIRS[me.seat],pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt);
       const first=!me.moved;Object.assign(me,{wx:pos.x,wy:pos.y,moved:true});movementDirty=true;if(first)updParts();
-    }
+    }else if(typeof advanceWalk==='function')advanceWalk(me,dt);
   }
   if(movementDirty&&ts-lastBC>=65){wsSend({type:'move',space:'normalized',wx:me.wx,wy:me.wy});lastBC=ts;movementDirty=false;}
   requestAnimationFrame(gameLoop);
@@ -1280,7 +1307,7 @@ function castCard(si){
   const c=CARDS[si];if(!c)return;
   if(energy<c.cost){showToast('⚡ Energia insuficiente!');return;}
   const me=players[myId];if(!me)return;
-  energy-=c.cost;updE();
+  energy-=c.cost;updE();me.reaction=si;me.reactionUntil=animT+2200;
   const{sx,sy}=ppos(me);
   effects.push({sx,sy,color:c.color,icon:c.icon,ts:animT});
   playSound(si);
@@ -1318,10 +1345,12 @@ function updParts(){
       <span class="prmic ${speaking[p.id]?'spk':'mut'}" id="mic-${p.id}">${p.listener?'👁️':(speaking[p.id]?'🎤':'🔇')}</span>
       ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">${p.moved?'● Pelo estúdio':'● Poltrona '+String(p.seat+1).padStart(2,'0')+' ocupada'}</small>`:''}
       ${!p.listener?`<meter id="level-${p.id}" min="0" max="100" value="0" aria-label="Volume de ${esc(p.name)}"></meter>`:''}
+      ${!p.listener?`<button type="button" class="audio-state" id="audio-state-${p.id}" data-audio-resume="${p.id}" aria-label="Estado do áudio de ${esc(p.name)}">Conectando áudio…</button>`:''}
       ${adminParticipantControls(p)}
     </div>`).join('');
   document.getElementById('plist').innerHTML=html;
   document.getElementById('fs-plist').innerHTML=html;
+  if(typeof refreshAudioLabels==='function')refreshAudioLabels();
 }
 
 function addChat(player,text,type='normal'){

@@ -63,3 +63,11 @@ No celular, joystick, microfone e chat ficam abaixo da área do estúdio.
 ## Entrada e saída lateral
 
 Participantes chegam em pé junto à porta esquerda. Caminhe com os controles ou escolha uma poltrona para sentar. A poltrona ocupada continua visível, com postura sentada. Para sair, volte à porta e clique nela ou em **Sair do podcast**. Passar perto não desconecta. A saída desliga o microfone e volta à tela inicial; gravações e envios pendentes devem ser concluídos primeiro.
+
+### Movimento e presença
+
+A chegada distribui os convidados em posições distintas perto da porta. Toque no piso para caminhar ao redor da mesa ou numa poltrona livre para caminhar até ela e sentar. Teclado e joystick interrompem o caminho automático.
+
+Braços e pernas acompanham os passos, com respiração em repouso e gestos ao falar, rir, aplaudir ou pedir a palavra. A preferência do aparelho por movimentos reduzidos é respeitada. Pedidos aparecem sobre o avatar e notificam o administrador. O estado do áudio aparece na lista de participantes; quando o navegador bloqueia a reprodução, toque no aviso para ouvir.
+
+O vídeo usa uma composição fixa de 1280 × 720, com título e nomes, independentemente do tamanho da tela que está gravando.
