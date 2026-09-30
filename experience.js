@@ -12,7 +12,7 @@ document.getElementById('raise-button').onclick=()=>wsSend({type:'hand_raise',ra
 canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
   const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
-  if(x<.20&&y>.20&&y<.52){exitThroughDoor();return;}
+  if(x>.115&&x<.235&&y>.07&&y<.32){exitThroughDoor();return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
   if(seat>=0)requestSeat({type:'sit',seat});
 });
@@ -60,7 +60,7 @@ const originalMicUI=updMicUI;updMicUI=function(){originalMicUI();document.getEle
 
 // The door never disconnects someone merely for walking past it.
 const exitButton=document.createElement('button');exitButton.id='exit-studio';exitButton.type='button';exitButton.textContent='Sair do podcast';exitButton.onclick=exitThroughDoor;dock.append(exitButton);
-function nearDoor(){const p=players[myId];return !!p&&(p.listener||(p.moved&&Math.abs(p.wx-.12)<.09&&Math.abs(p.wy-.48)<.12));}
+function nearDoor(){const p=players[myId];return !!p&&(p.listener||(p.moved&&Math.abs(p.wx-.175)<.08&&Math.abs(p.wy-.35)<.08));}
 function exitThroughDoor(){
  if(!running)return;
  if(!nearDoor()){showToast('Caminhe até a porta à esquerda para sair.');return;}

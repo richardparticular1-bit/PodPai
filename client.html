@@ -1064,7 +1064,7 @@ function drawRoom(){
   ctx.drawImage(studioLayer,0,0,CW,CH);drawStudioDoor();
 }
 function drawStudioDoor(){
-  const x=CW*.12,y=CH*.48,w=Math.min(CW*.13,70),h=Math.min(CH*.23,110);
+  const x=CW*.175,y=CH*.30,w=Math.min(CW*.095,70),h=CH*.21;
   ctx.save();pill(ctx,x-w*.56,y-h,w*1.12,h+4,5,'#574461','#b59bc477');
   pill(ctx,x-w*.46,y-h+5,w*.92,h-5,3,'#191321');
   const light=ctx.createLinearGradient(x-w*.5,y-h,x+w*.5,y);light.addColorStop(0,'#665579');light.addColorStop(1,'#282134');

@@ -95,7 +95,7 @@ wss.on('connection', (ws,req) => {
       const seat=msg.listener===true?null:Array.from({length:8},(_,i)=>i).find(i=>!occupied.has(i));
       if(msg.listener!==true&&[...clients.values()].filter(c=>!c.listener).length>=8){send(ws,{type:"room_full",message:"As 8 poltronas estão ocupadas. Entre como ouvinte."});ws.close(1008,"Room full");return;}
       myId = msg.id;
-      clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:.12,wy:.48,moved:msg.listener!==true,listener:msg.listener===true,isAdmin:false,adminMuted:false});
+      clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:.175,wy:.35,moved:msg.listener!==true,listener:msg.listener===true,isAdmin:false,adminMuted:false});
       const existing = [...clients.entries()]
         .filter(([id]) => id !== myId)
         .map(([id, c]) => snapshot(id,c));
