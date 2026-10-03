@@ -13,6 +13,7 @@ canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
   const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
   if(x>.115&&x<.235&&y>.07&&y<.32){exitThroughDoor();return;}
+  if(currentRoom==='backstage'&&x>.765&&x<.885&&y>.07&&y<.32){exitThroughDoor('garden');return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
   if(seat>=0)walkToChair(seat);else if(y>=.30)startWalk({x,y});
 });
@@ -61,12 +62,14 @@ const originalMicUI=updMicUI;updMicUI=function(){originalMicUI();document.getEle
 
 // The door never disconnects someone merely for walking past it.
 const exitButton=document.createElement('button');exitButton.id='exit-studio';exitButton.type='button';exitButton.textContent='Ir aos bastidores';exitButton.onclick=exitThroughDoor;dock.append(exitButton);
-function nearDoor(){const p=players[myId];return !!p&&(p.listener||(p.moved&&Math.abs(p.wx-.175)<.08&&Math.abs(p.wy-.35)<.08));}
-function exitThroughDoor(){
+const gardenButton=document.createElement('button');gardenButton.id='exit-garden';gardenButton.type='button';gardenButton.textContent='Ir ao jardim';gardenButton.hidden=true;gardenButton.onclick=()=>exitThroughDoor('garden');dock.append(gardenButton);
+function nearDoor(target){const p=players[myId],x=currentRoom==='backstage'&&target==='garden'?.825:.175;return !!p&&(p.listener||(p.moved&&Math.abs(p.wx-x)<.08&&Math.abs(p.wy-.35)<.08));}
+function exitThroughDoor(target){
  if(!running)return;
- if(!nearDoor()){showToast('Caminhe até a porta à esquerda para sair.');return;}
+ const destination=target==='garden'?'garden':currentRoom==='backstage'?'studio':'backstage';
+ if(!nearDoor(destination)){showToast(destination==='garden'?'Caminhe até a porta do jardim à direita.':'Caminhe até a porta à esquerda.');return;}
  if(recorder||recordPending||recordStarting||pendingUploads||unsavedParts){showToast('Finalize a gravação e conclua os envios antes de sair.');if(!document.getElementById('admin-dialog').open)document.getElementById('admin-dialog').showModal();return;}
-  resetMovementInput();wsSend({type:'change_room',room:currentRoom==='backstage'?'studio':'backstage'});
+  resetMovementInput();wsSend({type:'change_room',room:destination});
 }
 function paintBackstage(c){
  const w=CW,h=CH;
@@ -85,16 +88,43 @@ function paintBackstage(c){
  for(let i=0;i<3;i++){pill(c,x+sw*(.065+i*.29),y+sh*.1,sw*.27,sh*.58,8,'#a77a8f','#d3a0ac55');pill(c,x+sw*(.065+i*.29),y+sh*.70,sw*.27,sh*.28,5,'#75566d');}
  pill(c,x-sw*.035,y+sh*.35,sw*.09,sh*.68,7,'#63485e');pill(c,x+sw*.945,y+sh*.35,sw*.09,sh*.68,7,'#63485e');
  // Warm floor lamp and framed art make the lounge distinct from the studio.
- const lx=w*.85;studioGlow(c,lx,h*.24,w*.14,'#efba5933');
+ const lx=w*.94;studioGlow(c,lx,h*.24,w*.10,'#efba5933');
  pill(c,lx-2,h*.18,4,h*.25,2,'#b49779');oval(c,lx,h*.44,w*.035,h*.012,'#100f19');
  c.fillStyle='#edcca0';c.beginPath();c.moveTo(lx-w*.026,h*.12);c.lineTo(lx+w*.026,h*.12);c.lineTo(lx+w*.045,h*.22);c.lineTo(lx-w*.045,h*.22);c.closePath();c.fill();
- pill(c,w*.74,h*.065,w*.055,h*.14,4,'#201c2b','#bd9a76');oval(c,w*.767,h*.12,w*.016,h*.027,'#bc8c6c');
+ pill(c,w*.70,h*.065,w*.055,h*.14,4,'#201c2b','#bd9a76');oval(c,w*.727,h*.12,w*.016,h*.027,'#bc8c6c');
  drawBackstageShelf(c,w,h);
 }
 function drawBackstageShelf(c,w,h){
  pill(c,w*.04,h*.09,w*.055,h*.19,4,'#211d2c','#9b7c67');
  for(let i=0;i<5;i++)pill(c,w*(.045+i*.009),h*(.13+(i%2)*.015),w*.006,h*.075,1,['#c99a73','#92769f','#6d9d91'][i%3]);
  pill(c,w*.042,h*.21,w*.05,3,1,'#b29276');
+}
+function paintGarden(c){
+ const w=CW,h=CH;
+ const sky=c.createLinearGradient(0,0,0,h*.5);sky.addColorStop(0,'#263e58');sky.addColorStop(1,'#9eb3a1');c.fillStyle=sky;c.fillRect(0,0,w,h);
+ oval(c,w*.86,h*.09,w*.018,h*.032,'#ffdf9f');studioGlow(c,w*.86,h*.09,w*.10,'#ffdda033');
+ // A sheltered garden at dusk, with the backstage entrance in the facade.
+ c.fillStyle='#293e39';c.beginPath();c.moveTo(0,h*.24);c.bezierCurveTo(w*.25,h*.06,w*.50,h*.25,w,h*.13);c.lineTo(w,h);c.lineTo(0,h);c.closePath();c.fill();
+ c.fillStyle='#354a3e';c.fillRect(0,h*.30,w,h*.70);
+ for(let i=0;i<28;i++){const x=w*i/27;c.fillStyle=i%2?'#bbad8833':'#adac8333';c.fillRect(x,h*.21,w*.006,h*.11);}
+ pill(c,0,h*.065,w*.285,h*.255,6,'#514656','#b9997955');
+ c.strokeStyle='#c9b39744';c.lineWidth=2;c.beginPath();c.moveTo(0,h*.31);c.lineTo(w*.285,h*.31);c.stroke();
+ const lawn=c.createRadialGradient(w*.55,h*.6,0,w*.55,h*.6,w*.65);lawn.addColorStop(0,'#536b4c');lawn.addColorStop(1,'#263d36');c.fillStyle=lawn;c.fillRect(w*.29,h*.31,w*.71,h*.69);
+ oval(c,w*.5,h*.65,w*.405,h*.25,'#26352f');oval(c,w*.5,h*.63,w*.385,h*.235,'#918974');oval(c,w*.5,h*.625,w*.369,h*.22,'#aaa18a');
+ // Stone paving and a path from the building to the patio.
+ pill(c,w*.13,h*.32,w*.09,h*.20,10,'#aaa18a');
+ c.strokeStyle='#5c64522b';c.lineWidth=1;
+ for(let i=0;i<6;i++){c.beginPath();c.moveTo(w*.25,h*(.47+i*.055));c.lineTo(w*.75,h*(.47+i*.055));c.stroke();}
+ function tree(x,y,size){
+  pill(c,x-size*.06,y-size*.1,size*.12,size*.48,3,'#67513d');
+  oval(c,x,y-size*.25,size*.38,size*.52,'#233f37');oval(c,x-size*.18,y-size*.43,size*.32,size*.40,'#41624b');oval(c,x+size*.18,y-size*.42,size*.28,size*.36,'#526e50');
+ }
+ tree(w*.94,h*.36,Math.min(w*.15,h*.22));tree(w*.055,h*.52,Math.min(w*.10,h*.18));
+ for(let i=0;i<10;i++){const x=w*(.36+i*.056),y=h*(.30+(i%2)*.014);oval(c,x,y,w*.025,h*.033,'#365641');oval(c,x,y-h*.013,w*.004,h*.008,i%2?'#d5a7a5':'#dbc48b');}
+ // Warm string lights above the seating area.
+ c.strokeStyle='#202e32';c.lineWidth=2;c.beginPath();c.moveTo(w*.31,h*.055);c.quadraticCurveTo(w*.62,h*.22,w*.97,h*.07);c.stroke();
+ for(let i=0;i<9;i++){const t=i/8,x=w*(.31+.66*t),y=h*((1-t)*(1-t)*.055+2*(1-t)*t*.22+t*t*.07);studioGlow(c,x,y+5,Math.max(7,w*.013),'#f7d49355');oval(c,x,y+5,2.6,4,'#ffe2a6');}
+ pill(c,w*.39,h*.19,w*.23,h*.073,9,'#253b32','#ceb68766');c.textAlign='center';c.font=`800 ${Math.max(12,w*.022)}px Nunito,sans-serif`;c.fillStyle='#f2dfb5';c.fillText('JARDIM PODPAI',w*.505,h*.239,w*.21);
 }
 style.textContent+=`#surprise-room{position:fixed;inset:0;z-index:50;display:grid;place-items:center;align-content:center;gap:14px;text-align:center;color:#f3e8ff;background:radial-gradient(circle at 50% 30%,#49306d,#140d22 58%,#080611);overflow:hidden}#surprise-room h1{font-size:clamp(24px,5vw,54px);margin:0;text-shadow:0 0 22px #c78cff}#surprise-room p{font-size:clamp(14px,2vw,21px);color:#c9b6dd;margin:0}.surprise-stars{position:absolute;top:12%;font-size:28px;color:#d8b5ff;letter-spacing:10px}.surprise-sign{padding:9px 22px;border:1px solid #d3a6ff88;border-radius:999px;color:#e1b8ff;letter-spacing:6px;font-weight:800}.surprise-lounge{width:min(640px,82vw);height:150px;position:relative;border-bottom:8px solid #8a5bb0;border-radius:50%;background:linear-gradient(#21172f,#171124);box-shadow:0 18px 40px #0008}.surprise-lamp{position:absolute;left:12%;top:12px;font-size:58px;color:#ffd58f}.surprise-sofa{position:absolute;left:34%;top:62px;font-size:52px;letter-spacing:7px;color:#956db8;filter:drop-shadow(0 10px 8px #000)}.surprise-table{position:absolute;right:8%;top:80px;padding:17px 15px;border-radius:50%;background:#9c6d54;color:#ffe2bd;box-shadow:0 10px 0 #4c2f3a;font-size:22px}#return-studio{background:#9b6bd5;color:white;border:0;border-radius:12px;padding:13px 24px;font:700 16px Nunito,sans-serif;cursor:pointer;box-shadow:0 7px 0 #593d83}#return-studio:active{transform:translateY(3px);box-shadow:0 4px 0 #593d83}`;
 setInterval(()=>{exitButton.disabled=!running;exitButton.title=nearDoor()?'Atravessar a porta':'Caminhe até a porta à esquerda';exitButton.classList.toggle('at-door',nearDoor());},250);
@@ -110,11 +140,12 @@ style.textContent+=`
 
 // A tap selects a route; keyboard and joystick always take precedence.
 let walkPlan=null;
+style.textContent+='@media(max-width:760px){#exit-garden:not([hidden]){grid-column:1/3;grid-row:4;width:100%}}body.listener #studio-controls>#exit-garden:not([hidden]){display:block}';
 function cancelWalk(){walkPlan=null;}
 function startWalk(target,seat=null){
  const me=players[myId];if(!me||me.listener||!connected()||seatingPending)return;
  document.activeElement?.blur();resetMovementInput();
- const route=currentRoom==='backstage'?[StudioMovement.clamp(target.x,target.y)]:StudioMotion.route(StudioMotion.point(me),target);
+ const route=currentRoom!=='studio'?[StudioMovement.clamp(target.x,target.y)]:StudioMotion.route(StudioMotion.point(me),target);
  if(!route.length){showToast('Escolha outro ponto no chão.');return;}
  walkPlan={route,seat};
 }

@@ -66,6 +66,8 @@ Participantes chegam em pé junto à porta esquerda. Caminhe com os controles ou
 
 ### Movimento e presença
 
+Nos bastidores, a porta esquerda indica **Estúdio** e a direita **Jardim externo**. No jardim, a porta **Bastidores** permite retornar. Aproxime-se da porta correspondente e clique nela ou no botão de destino. O jardim tem movimento, assentos e conversa isolada dos outros ambientes, mantendo nome e avatar nas transições.
+
 A porta leva aos bastidores, com sofá, poltronas e iluminação própria. Aproxime-se dela e escolha **Ir aos bastidores** ou **Voltar ao estúdio**. Nome, avatar e estado do microfone permanecem; chat, participantes e conexões de áudio ficam separados por ambiente. Cada ambiente admite oito participantes. A gravação ocorre somente no estúdio, e quem está gravando deve finalizar os envios antes de trocar de sala.
 
 A chegada distribui os convidados em posições distintas perto da porta. Toque no piso para caminhar ao redor da mesa ou numa poltrona livre para caminhar até ela e sentar. Teclado e joystick interrompem o caminho automático.

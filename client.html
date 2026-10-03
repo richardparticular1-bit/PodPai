@@ -890,8 +890,9 @@ async function onMsg(msg){
     currentRoom=msg.room||'studio';studioDirty=true;
     document.body.classList.toggle('backstage',currentRoom==='backstage');
     document.getElementById('cmsgs').replaceChildren();bubbles=[];effects=[];
-    document.getElementById('exit-studio').textContent=currentRoom==='backstage'?'Voltar ao estúdio':'Ir aos bastidores';
-    document.querySelector('.room-hint').textContent=currentRoom==='backstage'?'Bastidores · conversa reservada a este ambiente':'Mover: WASD, setas ou joystick · Reagir: 1–5';
+    document.getElementById('exit-studio').textContent=currentRoom==='backstage'?'Ir ao estúdio':'Ir aos bastidores';
+    document.getElementById('exit-garden').hidden=currentRoom!=='backstage';
+    document.querySelector('.room-hint').textContent=currentRoom==='studio'?'Mover: WASD, setas ou joystick · Reagir: 1–5':(currentRoom==='garden'?'Jardim':'Bastidores')+' · conversa reservada a este ambiente';
     for(const id of Object.keys(players))if(id!==myId)delete players[id];
     if(msg.self)Object.assign(players[myId],msg.self);
     updateRecordingNotice(msg.recording||null);
@@ -976,6 +977,7 @@ function studioGlow(c,x,y,r,color){
   c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2);
 }
 function paintStudio(c){
+  if(currentRoom==='garden'){paintGarden(c);return;}
   if(currentRoom==='backstage'){paintBackstage(c);return;}
   const W=CW,H=CH,wall=H*.30,unit=Math.min(W/900,H/620);
   const floor=c.createLinearGradient(0,wall,0,H);floor.addColorStop(0,'#272332');floor.addColorStop(1,'#161522');
@@ -1083,14 +1085,15 @@ function drawRoom(){
   }
   ctx.drawImage(studioLayer,0,0,CW,CH);drawStudioDoor();
 }
-function drawStudioDoor(){
-  const x=CW*.175,y=CH*.30,w=Math.min(CW*.095,70),h=CH*.21;
+function drawStudioDoor(at=.175,label=currentRoom==='backstage'?'ESTÚDIO':'BASTIDORES'){
+  const x=CW*at,y=CH*.30,w=Math.min(CW*.095,70),h=CH*.21;
   ctx.save();pill(ctx,x-w*.56,y-h,w*1.12,h+4,5,'#574461','#b59bc477');
   pill(ctx,x-w*.46,y-h+5,w*.92,h-5,3,'#191321');
   const light=ctx.createLinearGradient(x-w*.5,y-h,x+w*.5,y);light.addColorStop(0,'#665579');light.addColorStop(1,'#282134');
   pill(ctx,x-w*.43,y-h+7,w*.75,h-8,3,light,'#bfa5cd55');oval(ctx,x+w*.23,y-h*.46,2.5,2.5,'#d9c48c');
-  ctx.textAlign='center';ctx.fillStyle='#dcebdc';ctx.font='800 '+Math.max(8,Math.min(11,CW/65))+'px Nunito,sans-serif';ctx.fillText('ENTRADA / SAÍDA',x,y-h-8);
+  ctx.textAlign='center';ctx.fillStyle='#dcebdc';ctx.font='800 '+Math.max(8,Math.min(11,CW/65))+'px Nunito,sans-serif';ctx.fillText(label,x,y-h-8);
   oval(ctx,x,y+8,w*.65,8,'#9edcc222');ctx.restore();
+  if(at===.175&&currentRoom==='backstage')drawStudioDoor(.825,'JARDIM EXTERNO');
 }
 function studioAvatarScale(){return Math.min(CW/(CW<580?520:700),CH/360,1.30);}
 function drawChairs(){

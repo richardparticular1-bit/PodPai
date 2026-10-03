@@ -93,7 +93,7 @@ wss.on('connection', (ws,req) => {
       if(myId)return;
       if(typeof msg.id!=='string'||!/^[-a-zA-Z0-9_]{1,80}$/.test(msg.id)||clients.has(msg.id)){ws.close(1008,'Invalid or duplicate identity');return;}
       if(removedIds.has(msg.id)){send(ws,{type:'removed',message:'Você foi removido desta sessão.'});ws.close(4003,'Removed');return;}
-      const room=msg.room==='backstage'?'backstage':'studio';
+      const room=['backstage','garden'].includes(msg.room)?msg.room:'studio';
       const occupied=new Set([...clients.values()].filter(c=>(c.room||'studio')===room&&!c.moved).map(c=>c.seat));
       const seat=msg.listener===true?null:Array.from({length:8},(_,i)=>i).find(i=>!occupied.has(i));
       if(msg.listener!==true&&[...clients.values()].filter(c=>!c.listener&&(c.room||'studio')===room).length>=8){send(ws,{type:"room_full",message:"Este ambiente está cheio. Entre como ouvinte."});ws.close(1008,"Room full");return;}
@@ -110,16 +110,19 @@ wss.on('connection', (ws,req) => {
     }
     else if(!myId||clients.get(myId)?.ws!==ws)return;
     else if(msg.type==='change_room'){
-      const c=clients.get(myId),room=msg.room==='backstage'?'backstage':'studio';
+      const c=clients.get(myId),room=msg.room;
+      const destinations={studio:['backstage'],backstage:['studio','garden'],garden:['backstage']};
+      if(!destinations[c.room]?.includes(room)){reject('Esta porta não leva a esse ambiente.');return;}
       if(room===c.room)return;
       if(recording?.by===myId){reject('Encerre a gravação antes de trocar de ambiente.');return;}
-      if(!c.listener&&(!c.moved||Math.abs(c.wx-.175)>.08||Math.abs(c.wy-.35)>.08)){reject('Aproxime-se da porta.');return;}
+      const doorX=c.room==='backstage'&&room==='garden'?.825:.175;
+      if(!c.listener&&(!c.moved||Math.abs(c.wx-doorX)>.08||Math.abs(c.wy-.35)>.08)){reject('Aproxime-se da porta.');return;}
       const others=[...clients.entries()].filter(([id,p])=>id!==myId&&(p.room||'studio')===room);
       if(!c.listener&&others.filter(([,p])=>!p.listener).length>=8){reject('Este ambiente está cheio. Aguarde uma vaga.');return;}
       broadcast({type:'leave',from:myId},myId,c.room);
-      c.room=room;c.handRaisedAt=null;c.moved=!c.listener;
+      const origin=c.room;c.room=room;c.handRaisedAt=null;c.moved=!c.listener;
       c.seat=c.listener?null:Array.from({length:8},(_,i)=>i).find(i=>!others.some(([,p])=>!p.moved&&p.seat===i));
-      Object.assign(c,{wx:.175,wy:.35});
+      Object.assign(c,{wx:origin==='garden'?.825:.175,wy:.35});
       send(ws,{type:'room_state',room,players:others.map(([id,p])=>snapshot(id,p)),self:snapshot(myId,c),recording:room==='studio'?recording:null});
       broadcast({type:'join',from:myId,...snapshot(myId,c)},myId);
     }
@@ -173,7 +176,7 @@ wss.on('connection', (ws,req) => {
       }
     }
     else if(msg.type==='recording_start'){
-      if(clients.get(myId).room==='backstage'){reject('A gravação está disponível no estúdio.');return;}
+      if(clients.get(myId).room!=='studio'){reject('A gravação está disponível no estúdio.');return;}
       if(!clients.get(myId).isAdmin){reject('Somente administradores podem gravar.');return;}
       if(recording){reject('Já existe uma gravação em andamento.');return;}
       recording={by:myId,name:clients.get(myId).name,startedAt:Date.now(),mode:msg.mode==='video'?'video':'audio'};

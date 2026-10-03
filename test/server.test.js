@@ -36,6 +36,17 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   admin.send({type:'chat',text:'private backstage'});admin.send({type:'offer',to:'guest',sdp:'private'});
   await new Promise(r=>setTimeout(r,60));assert.equal(b.messages.some(m=>m.type==='chat'||m.type==='offer'),false);
   admin.send({type:'recording_start'});await admin.next('admin_error');
+  admin.send({type:'change_room',room:'garden'});await admin.next('admin_error');
+  admin.send({type:'move',space:'normalized',wx:.825,wy:.35});
+  admin.send({type:'change_room',room:'garden'});
+  const garden=await admin.next('room_state');assert.equal(garden.room,'garden');assert.equal(garden.self.id,'admin');assert.equal(garden.self.wx,.175);assert.equal(garden.players.length,0);
+  admin.send({type:'change_room',room:'studio'});await admin.next('admin_error');
+  admin.send({type:'recording_start'});await admin.next('admin_error');
+  admin.send({type:'chat',text:'private garden'});admin.send({type:'offer',to:'guest',sdp:'private garden'});
+  await new Promise(r=>setTimeout(r,60));assert.equal(b.messages.some(m=>m.type==='chat'||m.type==='offer'),false);
+  admin.send({type:'change_room',room:'backstage'});
+  const backFromGarden=await admin.next('room_state');assert.equal(backFromGarden.room,'backstage');assert.equal(backFromGarden.self.wx,.825);
+  admin.send({type:'move',space:'normalized',wx:.175,wy:.35});
   admin.send({type:'change_room',room:'studio'});
   const returned=await admin.next('room_state');assert.equal(returned.room,'studio');assert.equal(returned.self.id,'admin');assert.equal(returned.players[0].id,'guest');
   admin.send({type:'sit',seat:0});await admin.next('seat_state');
