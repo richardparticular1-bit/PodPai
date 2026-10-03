@@ -238,7 +238,8 @@ wss.on('connection', (ws,req) => {
           else if(target!==from){held.x+=dx;held.y+=dy;for(const [id,p] of members)if(id!==myId){p.wx+=dx;p.wy+=dy;broadcast({type:'move',from:id,wx:p.wx,wy:p.wy,moved:true,space:'normalized'},null,'garden');}}
         }else if(held){held.x=target.x;held.y=target.y;}
         Object.assign(c,{wx:target.x,wy:target.y,moved:true,lastGardenMove:Date.now()});
-        broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized'},null,'garden');if(held)gardenState();return;
+        const accepted=Math.abs(c.wx-msg.wx)<1e-9&&Math.abs(c.wy-msg.wy)<1e-9;
+        broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized',accepted},null,'garden');if(held)gardenState();return;
       }
       Object.assign(c,{wx:position.x,wy:position.y,moved:true});
       broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized'},myId);

@@ -882,7 +882,9 @@ function wsSend(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify({...d,from:my
 
 async function onMsg(msg){
   if(msg.type==='garden_state'){gardenObjects=msg.objects;gardenClockOffset=msg.time-Date.now();return;}
-  if(msg.type==='move'&&msg.from===myId&&currentRoom==='garden'){Object.assign(players[myId],{wx:msg.wx,wy:msg.wy,moved:true});return;}
+  // Accepted echoes can arrive after several more local frames. Only corrections
+  // and cooperative moves should replace our predicted position.
+  if(msg.type==='move'&&msg.from===myId&&currentRoom==='garden'){if(!msg.accepted&&players[myId])Object.assign(players[myId],{wx:msg.wx,wy:msg.wy,moved:true});return;}
   if(msg.type==='room_full'){
     localStream?.getTracks().forEach(t=>t.stop());isMuted=true;updMicUI();
     const notice=document.getElementById('recording-notice');notice.dataset.entryError='1';notice.classList.add('active');notice.textContent=msg.message+' ';
