@@ -1039,7 +1039,7 @@ function paintStudio(c){
   oval(c,W*.5,H*.625,W*.38,H*.24,rug);
   for(let i=0;i<5;i++){c.beginPath();c.ellipse(W*.5,H*.625,W*.38-i*2,H*.24-i*2,0,0,Math.PI*2);c.strokeStyle=i===0?'#9e8d9e55':'#c2abc30a';c.stroke();}
   // A broad walnut desk, with a bevel, pedestal and suspended underlight.
-  const tx=W*.5,ty=H*.57,rx=W*.225,ry=H*.115;
+  const tx=W*.5,ty=H*.54,rx=W*.225,ry=H*.115;
   oval(c,tx,ty+H*.07,rx*1.05,ry*.85,'#080a1288');
   pill(c,tx-rx*.27,ty+ry*.2,rx*.54,H*.10,12,'#191823');oval(c,tx,ty+H*.12,rx*.43,ry*.26,'#101018');
   c.save();c.shadowColor='#bb8de9';c.shadowBlur=20;oval(c,tx,ty+8,rx*.98,ry,'#9c6fc861');c.restore();
@@ -1066,6 +1066,14 @@ function paintStudio(c){
     pill(c,mx+dir*7*unit-5*unit,my-36*unit,10*unit,17*unit,5*unit,'#1b1925','#8b768e');
     for(let j=0;j<3;j++){c.strokeStyle='#74667e';c.lineWidth=.8;c.beginPath();c.moveTo(mx+dir*7*unit-3*unit,my-(32-j*3)*unit);c.lineTo(mx+dir*7*unit+3*unit,my-(32-j*3)*unit);c.stroke();}
   }
+  // Cantinho de água e café, junto à caixa direita.
+  const barX=W*.82,barY=wall+H*.19,barW=Math.max(58,W*.105),barH=Math.max(28,H*.045);
+  pill(c,barX-barW/2,barY,barW,barH,7,'#4b3442','#c9a1a366');
+  pill(c,barX-barW*.38,barY+barH,barW*.76,H*.055,5,'#332637','#87687566');
+  oval(c,barX-barW*.22,barY-barH*.12,barW*.09,barH*.18,'#9bd6df');
+  pill(c,barX+barW*.03,barY-barH*.38,barW*.12,barH*.38,4,'#d9e5e0','#9bc4b5');
+  oval(c,barX+barW*.24,barY-barH*.08,barW*.09,barH*.16,'#e0c4a6');
+  c.fillStyle='#f0d7b0';c.font=`700 ${Math.max(8,9*unit)}px Nunito,sans-serif`;c.textAlign='center';c.fillText('ÁGUA  •  CAFÉ',barX,barY+barH*.72);
   // Gentle vignette keeps attention in the center.
   const shade=c.createRadialGradient(W*.5,H*.48,W*.22,W*.5,H*.5,Math.max(W,H)*.75);shade.addColorStop(0,'transparent');shade.addColorStop(1,'#06081188');c.fillStyle=shade;c.fillRect(0,0,W,H);
 }
@@ -1108,16 +1116,17 @@ function drawChairs(){
 }
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
-  const seated=!p.moved,s=studioAvatarScale()*(seated?.84:1);
+  const seated=!p.moved,s=studioAvatarScale()*(seated?.84:p.climbed?1.08:1);
   const talking=!!speaking[p.id];
   const state=avatarMotion.get(p.id),reaction=p.reactionUntil>animT?p.reaction:-1;
-  const pose=StudioMotion.pose({time:animT,phase:state?.phase||0,walking:!!state?.walking,talking,seated,hand:!!p.handRaisedAt,reaction,reduced:reducedMotion.matches});
+  const pose=StudioMotion.pose({time:animT,phase:state?.phase||0,walking:!!state?.walking,talking,seated,hand:!!p.handRaisedAt,reaction:p.drinkUntil>animT?4:reaction,reduced:reducedMotion.matches});
   const bob=pose.bob;
   ctx.save();ctx.translate(sx,sy);ctx.scale(s,s);
   oval(ctx,0,5,22,7,'#05081177');
   if(isMe||talking){ctx.beginPath();ctx.ellipse(0,4,26+(talking&&!reducedMotion.matches?Math.sin(animT/150)*2:0),9,0,0,Math.PI*2);ctx.strokeStyle=talking?'#9af1d4':'#bd9affaa';ctx.lineWidth=1.8;ctx.stroke();}
   ctx.translate(0,bob);ctx.rotate(pose.lean);ctx.textAlign="center";
-  if(seated){
+  if(p.climbed){ctx.save();ctx.translate(0,-28);paintAvatar(ctx,p.avatar,p.color,false,pose);ctx.restore();}
+  else if(seated){
     // Draw the occupied armchair at avatar scale so the back and arms are never hidden.
     pill(ctx,-34,-61,68,62,13,'#584561','#bca1c477');
     pill(ctx,-28,-55,56,41,10,'#6b5275','#c9afcf44');
@@ -1213,7 +1222,7 @@ function gameLoop(ts){
     const k=kd(),dx=jdx()+k.x,dy=jdy()+k.y;
     if((dx||dy)&&typeof cancelWalk==='function')cancelWalk();
     if(dx||dy){
-      const initial=CHAIRS[me.seat],pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt);
+      const initial=CHAIRS[me.seat],pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt,!!me.climbed,true);
       const first=!me.moved;Object.assign(me,{wx:pos.x,wy:pos.y,moved:true});movementDirty=true;if(first)updParts();
     }else if(typeof advanceWalk==='function')advanceWalk(me,dt);
   }

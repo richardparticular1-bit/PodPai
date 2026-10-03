@@ -69,7 +69,7 @@ const removedIds = new Set();
 const authFailures = new Map();
 const adminPassword = process.env.ADMIN_PASSWORD || '';
 let recording = null;
-const snapshot = (id,c) => ({id,name:c.name,avatar:c.avatar,color:c.color,seat:c.seat,wx:c.wx,wy:c.wy,moved:c.moved,handRaisedAt:c.handRaisedAt||null,listener:c.listener,isAdmin:c.isAdmin,adminMuted:c.adminMuted});
+const snapshot = (id,c) => ({id,name:c.name,avatar:c.avatar,color:c.color,seat:c.seat,wx:c.wx,wy:c.wy,moved:c.moved,climbed:!!c.climbed,handRaisedAt:c.handRaisedAt||null,listener:c.listener,isAdmin:c.isAdmin,adminMuted:c.adminMuted});
 function recordingState(){return {type:'recording_state',recording};}
 function endRecording(id){if(recording?.by===id){recording=null;broadcast(recordingState());}}
 
@@ -187,7 +187,7 @@ wss.on('connection', (ws,req) => {
       const c=clients.get(myId);
       if(c.listener||msg.space!=='normalized'||!Number.isFinite(msg.wx)||!Number.isFinite(msg.wy))return;
       const position=movement.clamp(msg.wx,msg.wy);
-      Object.assign(c,{wx:position.x,wy:position.y,moved:true});
+      Object.assign(c,{wx:position.x,wy:position.y,moved:true,climbed:msg.climbed===true});
       broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized'},myId);
     }
     else if (msg.type === 'chat' && myId) {
