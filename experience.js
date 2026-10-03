@@ -1,6 +1,6 @@
 // Seating and moderation are confirmed by the server.
 const dock=document.createElement('div');dock.id='studio-controls';
-dock.innerHTML='<div class="movement-controls"><button id="stand-button" type="button">Levantar</button><select id="seat-choice" aria-label="Poltrona livre"></select><button id="sit-button" type="button">Sentar</button><button id="climb-button" type="button">Subir na mesa</button></div><button id="raise-button" type="button">✋ Pedir a palavra</button><div class="mobile-actions"><button id="mobile-mic" type="button">Microfone</button><button id="mobile-chat" type="button">Chat</button></div>';
+dock.innerHTML='<div class="movement-controls"><button id="stand-button" type="button">Levantar</button><select id="seat-choice" aria-label="Poltrona livre"></select><button id="sit-button" type="button">Sentar</button></div><button id="raise-button" type="button">✋ Pedir a palavra</button><div class="mobile-actions"><button id="mobile-mic" type="button">Microfone</button><button id="mobile-chat" type="button">Chat</button></div>';
 document.getElementById('bottom').before(dock);dock.prepend(document.getElementById('jzone'));
 document.getElementById('mobile-mic').onclick=()=>toggleMic();
 document.getElementById('mobile-chat').onclick=()=>document.getElementById('btn-panel').click();
@@ -9,12 +9,10 @@ function requestSeat(message){cancelWalk();if(seatingPending||!connected())retur
 document.getElementById('stand-button').onclick=()=>requestSeat({type:'stand'});
 document.getElementById('sit-button').onclick=()=>walkToChair(Number(document.getElementById('seat-choice').value));
 document.getElementById('raise-button').onclick=()=>wsSend({type:'hand_raise',raised:!players[myId]?.handRaisedAt});
-document.getElementById('climb-button').onclick=()=>{const me=players[myId];if(!me)return;me.climbed=!me.climbed;wsSend({type:'move',space:'normalized',wx:me.wx,wy:me.wy,climbed:me.climbed});showToast(me.climbed?'Você subiu na mesa.':'Você desceu da mesa.');};
 canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
   const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
   if(x>.115&&x<.235&&y>.07&&y<.32){exitThroughDoor();return;}
-  if(Math.abs(x-.82)<.10&&y>.34&&y<.52){const me=players[myId];if(me?.moved){me.drinkUntil=performance.now()+2200;showToast('Você pegou água ou café.');}return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
   if(seat>=0)walkToChair(seat);else if(y>=.30)startWalk({x,y});
 });
@@ -37,8 +35,7 @@ function refreshExperience(){
  if([...select.options].some(o=>o.value===previous&&!o.disabled))select.value=previous;
  else select.value=[...select.options].find(o=>!o.disabled)?.value||'';
  document.getElementById('stand-button').disabled=!me||me.listener||me.moved;
-  document.getElementById('sit-button').disabled=!me||me.listener||select.value==='';
-  const climb=document.getElementById('climb-button');climb.disabled=!me||me.listener||!me.moved;climb.textContent=me?.climbed?'Descer da mesa':'Subir na mesa';
+ document.getElementById('sit-button').disabled=!me||me.listener||select.value==='';
  const raise=document.getElementById('raise-button');raise.disabled=!me||me.listener;raise.textContent=me?.handRaisedAt?'✋ Cancelar pedido':'✋ Pedir a palavra';raise.setAttribute('aria-pressed',!!me?.handRaisedAt);
  document.getElementById('host-participants').innerHTML=Object.values(players).map(p=>'<div class="host-person"><strong>'+esc(p.name)+'</strong>'+adminParticipantControls(p)+'</div>').join('');
  const queue=Object.values(players).filter(p=>p.handRaisedAt).sort((a,b)=>a.handRaisedAt-b.handRaisedAt);

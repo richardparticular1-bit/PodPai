@@ -45,10 +45,10 @@
   }
   function pose({time=0,phase=0,walking=false,talking=false,seated=false,hand=false,reaction=-1,reduced=false}={}){
     const stride=!reduced&&walking&&!seated?Math.sin(phase):0,t=time/1000;
-    const clap=reaction===2,raised=hand||reaction===3,drink=reaction===4;
+    const clap=reaction===2,raised=hand||reaction===3;
     return {leftLeg:stride*.48,rightLeg:-stride*.48,
       leftArm:clap?-.95+(!reduced?Math.sin(t*15)*.35:0):stride*-.5,
-      rightArm:raised?-2.65:drink?-1.35:clap?.95-(!reduced?Math.sin(t*15)*.35:0):stride*.5+(talking&&seated&&!reduced?Math.sin(t*4)*.14:0),
+      rightArm:raised?-2.65:clap?.95-(!reduced?Math.sin(t*15)*.35:0):stride*.5+(talking&&seated&&!reduced?Math.sin(t*4)*.14:0),
       bob:reduced?0:reaction===1?Math.sin(t*18)*1.8:walking?Math.abs(stride)*1.6:Math.sin(t*2)*.5,
       lean:!reduced&&reaction===1?Math.sin(t*9)*.045:0};
   }
