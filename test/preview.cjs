@@ -57,6 +57,11 @@ fs.createReadStream=function(file,...args){
   if(path.basename(file)==='client.html'){
     let html=fs.readFileSync(file,'utf8');
     html=html.replace('</body>',`<script>
+      if(new URLSearchParams(location.search).get('room')==='garden')currentRoom='garden';
+      if(new URLSearchParams(location.search).has('spatial')){
+        const diag=document.createElement('pre');diag.id='fixture-spatial';diag.style.cssText='position:fixed;bottom:0;left:0;background:#111;color:white;z-index:2000';document.body.append(diag);
+        setInterval(()=>{diag.textContent=JSON.stringify(Object.fromEntries(Object.entries(spatialAudio).map(([id,a])=>[players[id]?.name||id,{gain:Number(a.gain.gain.value.toFixed(3)),elementMuted:document.getElementById('aud-'+id)?.muted}])));},250);
+      }
       initMic=async function(){
         const ac=getAC(),dest=ac.createMediaStreamDestination(),tone=ac.createOscillator();tone.frequency.value=440;tone.connect(dest);tone.start();localStream=dest.stream;
         localStream.getAudioTracks().forEach(t=>t.enabled=false);isMuted=true;updMicUI();const an=ac.createAnalyser();an.fftSize=256;ac.createMediaStreamSource(localStream).connect(an);analysers[myId]=an;recordingAttach(myId,localStream);return true;

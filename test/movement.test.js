@@ -5,7 +5,7 @@ test('client loop sends normalized movement, flushes the last position and pause
   const vm=require('node:vm'),html=require('node:fs').readFileSync(require('node:path').join(__dirname,'../client.html'),'utf8');
   const source=html.match(/function gameLoop\(ts\)\{[\s\S]*?\n\}/)[0],messages=[];
   const ctx=vm.createContext({StudioMovement:movement,players:{me:{seat:0,moved:false}},myId:'me',CHAIRS:[[.5,.36]],running:true,entryMode:'part',lastMovementFrame:0,lastBC:0,movementDirty:false,typing:false,input:1,
-    tickEnergy:()=>{},requestAnimationFrame:()=>{},updParts:()=>{},jdx:()=>0,jdy:()=>0,wsSend:m=>messages.push(m)});
+    currentRoom:'studio',tickEnergy:()=>{},requestAnimationFrame:()=>{},updParts:()=>{},jdx:()=>0,jdy:()=>0,wsSend:m=>messages.push(m)});
   vm.runInContext('function isTyping(){return typing;}function kd(){return{x:input,y:0};}'+source,ctx);
   vm.runInContext('gameLoop(20);input=0;gameLoop(80);',ctx);
   assert.equal(messages.length,1);assert.equal(messages[0].space,'normalized');assert.ok(messages[0].wx>.5&&messages[0].wx<.51);

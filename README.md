@@ -66,6 +66,10 @@ Participantes chegam em pé junto à porta esquerda. Caminhe com os controles ou
 
 ### Movimento e presença
 
+O jardim é um mapa ampliado com câmera acompanhando o avatar, trilha, lago com margem bloqueada, bancos, cadeiras, puffs e balanço. Há três pássaros e um gato em trajetos visuais compartilhados. Os oito assentos têm ocupação exclusiva. Perto de uma bola ou avião de brinquedo, use **Pegar** e **Soltar**; apenas uma pessoa pode carregar cada item. O carrinho exige dois participantes: ambos pegam e podem movê-lo juntos, parando quando alguém solta ou desconecta. Trocar de ambiente ou desconectar libera os objetos. As posições dos objetos duram enquanto o servidor está ativo; ainda não existe inventário persistente.
+
+No jardim, o áudio diminui gradualmente com a distância usando Web Audio. O indicador **Ao alcance** mostra as vozes próximas. No estúdio e nos bastidores, permanece o áudio do ambiente inteiro. Ouvintes acompanham o jardim a partir da entrada; entrar como participante permite explorar o mapa. **Caminhar à entrada** encontra um caminho de volta contornando o lago.
+
 Nos bastidores, a porta esquerda indica **Estúdio** e a direita **Jardim externo**. No jardim, a porta **Bastidores** permite retornar. Aproxime-se da porta correspondente e clique nela ou no botão de destino. O jardim tem movimento, assentos e conversa isolada dos outros ambientes, mantendo nome e avatar nas transições.
 
 A porta leva aos bastidores, com sofá, poltronas e iluminação própria. Aproxime-se dela e escolha **Ir aos bastidores** ou **Voltar ao estúdio**. Nome, avatar e estado do microfone permanecem; chat, participantes e conexões de áudio ficam separados por ambiente. Cada ambiente admite oito participantes. A gravação ocorre somente no estúdio, e quem está gravando deve finalizar os envios antes de trocar de sala.

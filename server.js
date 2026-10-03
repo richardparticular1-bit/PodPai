@@ -10,6 +10,7 @@ const path = require('path');
 const crypto = require('crypto');
 const movement=require('./movement');
 const studioMotion=require('./studio-motion');
+const garden=require('./garden'),gardenObjects=garden.createObjects();
 
 const episodeStorage=require('./episode-storage').createEpisodeStorage();
 
@@ -42,6 +43,8 @@ const server = http.createServer((req, res) => {
     '/movement.js': 'movement.js',
     '/studio-motion.js': 'studio-motion.js',
     '/experience.js': 'experience.js',
+    '/garden.js':'garden.js',
+    '/garden-view.js':'garden-view.js',
     '/episodes.js': 'episodes.js',
     '/tus.min.js': 'node_modules/tus-js-client/dist/tus.min.js',
     '/icon-192.png':'icon-192.png',
@@ -57,7 +60,7 @@ const server = http.createServer((req, res) => {
   const ext = path.extname(fileName);
   res.writeHead(200, {
     'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','studio-motion.js','experience.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
+    'Cache-Control': ['client.html','admin.js','episodes.js','movement.js','studio-motion.js','experience.js','garden.js','garden-view.js','sw.js'].includes(fileName) ? 'no-cache' : 'public, max-age=86400',
   });
   fs.createReadStream(filePath).pipe(res);
 });
@@ -76,6 +79,8 @@ function endRecording(id){if(recording?.by===id){recording=null;broadcast(record
 function send(ws, data)        { if (ws.readyState === 1) ws.send(JSON.stringify(data)); }
 function broadcast(data, skip, room=clients.get(data.from||data.id||skip)?.room||'studio') { for (const [id, c] of clients) if (id !== skip&&(c.room||'studio')===room) send(c.ws, data); }
 function sendTo(id, data)      { const c = clients.get(id); if (c) send(c.ws, data); }
+function gardenState(){broadcast({type:'garden_state',objects:gardenObjects,time:Date.now()},null,'garden');}
+function dropObjects(id){garden.release(gardenObjects,id);gardenState();}
 
 wss.on('connection', (ws,req) => {
   let myId = null;
@@ -101,11 +106,13 @@ wss.on('connection', (ws,req) => {
       myId = msg.id;
       clients.set(myId, {ws,seat,name:String(msg.name||'Convidado').slice(0,32),avatar:Number.isInteger(msg.avatar)&&msg.avatar>=0&&msg.avatar<8?msg.avatar:0,color:/^#[0-9a-f]{6}$/i.test(msg.color)?msg.color:'#b896da',wx:entry.x,wy:entry.y,moved:msg.listener!==true,listener:msg.listener===true,isAdmin:false,adminMuted:false});
       clients.get(myId).room=room;
+      if(room==='garden')Object.assign(clients.get(myId),{wx:.175,wy:.35});
       const existing = [...clients.entries()]
         .filter(([id,c]) => id !== myId&&(c.room||'studio')===room)
         .map(([id, c]) => snapshot(id,c));
       send(ws, { type: 'room_state', room, players: existing, self:snapshot(myId,clients.get(myId)), recording:room==='studio'?recording:null });
       broadcast({ type: 'join', from: myId, ...snapshot(myId,clients.get(myId)) }, myId);
+      if(room==='garden')gardenState();
       console.log(`[+] Participant joined | ${clients.size} online`);
     }
     else if(!myId||clients.get(myId)?.ws!==ws)return;
@@ -120,11 +127,20 @@ wss.on('connection', (ws,req) => {
       const others=[...clients.entries()].filter(([id,p])=>id!==myId&&(p.room||'studio')===room);
       if(!c.listener&&others.filter(([,p])=>!p.listener).length>=8){reject('Este ambiente está cheio. Aguarde uma vaga.');return;}
       broadcast({type:'leave',from:myId},myId,c.room);
+      dropObjects(myId);
       const origin=c.room;c.room=room;c.handRaisedAt=null;c.moved=!c.listener;
       c.seat=c.listener?null:Array.from({length:8},(_,i)=>i).find(i=>!others.some(([,p])=>!p.moved&&p.seat===i));
       Object.assign(c,{wx:origin==='garden'?.825:.175,wy:.35});
       send(ws,{type:'room_state',room,players:others.map(([id,p])=>snapshot(id,p)),self:snapshot(myId,c),recording:room==='studio'?recording:null});
       broadcast({type:'join',from:myId,...snapshot(myId,c)},myId);
+      if(room==='garden')gardenState();
+    }
+    else if(msg.type==='garden_object'){
+      const c=clients.get(myId);if(c.room!=='garden'||c.listener)return;
+      if(msg.action==='drop'){dropObjects(myId);return;}
+      if(msg.action!=='take')return;
+      if(!c.moved||!garden.claim(gardenObjects,myId,msg.id,c)){reject('Aproxime-se de um objeto livre. Cada pessoa segura apenas um objeto.');return;}
+      gardenState();
     }
     else if(msg.type==='cloud_request'){
       const c=clients.get(myId);
@@ -171,7 +187,7 @@ wss.on('connection', (ws,req) => {
       }else if(msg.action==='remove'){
         if(removedIds.size<10000)removedIds.add(msg.target);
         send(target.ws,{type:'removed',message:'Você foi removido da sala pelo administrador.'});
-        clients.delete(msg.target);broadcast({type:'leave',from:msg.target},null,target.room);endRecording(msg.target);
+        dropObjects(msg.target);clients.delete(msg.target);broadcast({type:'leave',from:msg.target},null,target.room);endRecording(msg.target);
         target.ws.close(4003,'Removed by administrator');
       }
     }
@@ -194,12 +210,14 @@ wss.on('connection', (ws,req) => {
     else if(msg.type==='sit'||msg.type==='stand'){
       const c=clients.get(myId);if(c.listener)return;
       if(msg.type==='sit'){
+        if(c.room==='garden'&&gardenObjects.some(o=>o.holders.includes(myId))){reject('Solte o objeto antes de sentar.');return;}
         if(!Number.isInteger(msg.seat)||msg.seat<0||msg.seat>7)return;
+        if(c.room==='garden'&&garden.distance(garden.point(c),{x:garden.seats[msg.seat][0],y:garden.seats[msg.seat][1]})>100){reject('Aproxime-se do assento.');return;}
         if([...clients.entries()].some(([id,p])=>id!==myId&&p.room===c.room&&!p.listener&&!p.moved&&p.seat===msg.seat)){reject('Esta poltrona já está ocupada.');return;}
         c.seat=msg.seat;c.moved=false;
       }else{
         const chairs=[[.5,.36],[.31,.43],[.69,.43],[.33,.72],[.67,.72],[.5,.79],[.17,.60],[.83,.60]];
-        if(!c.moved){[c.wx,c.wy]=chairs[c.seat];c.moved=true;}
+        if(!c.moved){[c.wx,c.wy]=(c.room==='garden'?garden.seats:chairs)[c.seat];c.moved=true;}
       }
       broadcast({type:'seat_state',...snapshot(myId,c)});
     }
@@ -207,6 +225,21 @@ wss.on('connection', (ws,req) => {
       const c=clients.get(myId);
       if(c.listener||msg.space!=='normalized'||!Number.isFinite(msg.wx)||!Number.isFinite(msg.wy))return;
       const position=movement.clamp(msg.wx,msg.wy);
+      if(c.room==='garden'){
+        const from=garden.point(c),held=gardenObjects.find(o=>o.holders.includes(myId));
+        let target=garden.safe(from,position);
+        const maxStep=145*Math.min(.25,Math.max(.065,(Date.now()-(c.lastGardenMove||Date.now()))/1000));
+        const d=garden.distance(from,target);if(d>maxStep){const f=maxStep/d;target={x:from.x+(target.x-from.x)*f,y:from.y+(target.y-from.y)*f};}
+        if(held?.required>1){
+          if(held.holders.length<held.required)target=from;
+          const dx=target.x-from.x,dy=target.y-from.y;
+          const members=held.holders.map(id=>[id,clients.get(id)]);
+          if(!garden.clear(held,{x:held.x+dx,y:held.y+dy})||members.some(([,p])=>!p||garden.distance(garden.point(p),held)>160||!garden.clear(garden.point(p),{x:p.wx+dx,y:p.wy+dy})||p.wx+dx<.1||p.wx+dx>.9||p.wy+dy<.32||p.wy+dy>.84))target=from;
+          else if(target!==from){held.x+=dx;held.y+=dy;for(const [id,p] of members)if(id!==myId){p.wx+=dx;p.wy+=dy;broadcast({type:'move',from:id,wx:p.wx,wy:p.wy,moved:true,space:'normalized'},null,'garden');}}
+        }else if(held){held.x=target.x;held.y=target.y;}
+        Object.assign(c,{wx:target.x,wy:target.y,moved:true,lastGardenMove:Date.now()});
+        broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized'},null,'garden');if(held)gardenState();return;
+      }
       Object.assign(c,{wx:position.x,wy:position.y,moved:true});
       broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized'},myId);
     }
@@ -227,7 +260,7 @@ wss.on('connection', (ws,req) => {
   ws.on('close', () => {
     if (!myId) return;
     const c = clients.get(myId);
-    if (c?.ws===ws) { clients.delete(myId);broadcast({ type: 'leave', from: myId },null,c.room);endRecording(myId);console.log(`[-] Participant left | ${clients.size} online`); }
+    if (c?.ws===ws) { dropObjects(myId);clients.delete(myId);broadcast({ type: 'leave', from: myId },null,c.room);endRecording(myId);console.log(`[-] Participant left | ${clients.size} online`); }
   });
 
   ws.on('error', () => {});

@@ -11,7 +11,8 @@ document.getElementById('sit-button').onclick=()=>walkToChair(Number(document.ge
 document.getElementById('raise-button').onclick=()=>wsSend({type:'hand_raise',raised:!players[myId]?.handRaisedAt});
 canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
-  const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+  const r=canvas.getBoundingClientRect();let x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+  if(currentRoom==='garden'){x=x/2+gardenCamera.x;y=y/2+gardenCamera.y;}
   if(x>.115&&x<.235&&y>.07&&y<.32){exitThroughDoor();return;}
   if(currentRoom==='backstage'&&x>.765&&x<.885&&y>.07&&y<.32){exitThroughDoor('garden');return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
@@ -32,7 +33,8 @@ updParts=function(){originalParts();refreshExperience();};
 function refreshExperience(){
  const me=players[myId],select=document.getElementById('seat-choice'),previous=select.value;
  select.replaceChildren();
- CHAIRS.forEach((_,i)=>{const occupant=Object.values(players).find(p=>!p.listener&&!p.moved&&p.seat===i);const o=document.createElement('option');o.value=i;o.textContent=String(i+1).padStart(2,'0')+(occupant?' · ocupada':' · livre');o.disabled=!!occupant;select.append(o);});
+ select.setAttribute('aria-label','Assento livre');
+ CHAIRS.forEach((_,i)=>{const occupant=Object.values(players).find(p=>!p.listener&&!p.moved&&p.seat===i);const o=document.createElement('option');o.value=i;o.textContent=String(i+1).padStart(2,'0')+(currentRoom==='garden'?' · '+Garden.kinds[i]:'')+(occupant?' · ocupado':' · livre');o.disabled=!!occupant;select.append(o);});
  if([...select.options].some(o=>o.value===previous&&!o.disabled))select.value=previous;
  else select.value=[...select.options].find(o=>!o.disabled)?.value||'';
  document.getElementById('stand-button').disabled=!me||me.listener||me.moved;
@@ -110,7 +112,9 @@ function paintGarden(c){
  pill(c,0,h*.065,w*.285,h*.255,6,'#514656','#b9997955');
  c.strokeStyle='#c9b39744';c.lineWidth=2;c.beginPath();c.moveTo(0,h*.31);c.lineTo(w*.285,h*.31);c.stroke();
  const lawn=c.createRadialGradient(w*.55,h*.6,0,w*.55,h*.6,w*.65);lawn.addColorStop(0,'#536b4c');lawn.addColorStop(1,'#263d36');c.fillStyle=lawn;c.fillRect(w*.29,h*.31,w*.71,h*.69);
- oval(c,w*.5,h*.65,w*.405,h*.25,'#26352f');oval(c,w*.5,h*.63,w*.385,h*.235,'#918974');oval(c,w*.5,h*.625,w*.369,h*.22,'#aaa18a');
+ c.strokeStyle='#b3a38b';c.lineWidth=h*.055;c.lineCap='round';c.beginPath();c.moveTo(w*.175,h*.35);c.bezierCurveTo(w*.30,h*.60,w*.40,h*.40,w*.43,h*.63);c.bezierCurveTo(w*.47,h*.85,w*.77,h*.83,w*.86,h*.60);c.stroke();c.lineCap='butt';
+ oval(c,w*.60,h*.57,w*.13,h*.085,'#a5a17e');oval(c,w*.60,h*.57,w*.12,h*.075,'#4a868b');oval(c,w*.60,h*.568,w*.10,h*.055,'#71a7a3');
+ for(let i=0;i<5;i++){c.strokeStyle='#c5ded066';c.lineWidth=1;c.beginPath();c.ellipse(w*(.56+i*.02),h*(.55+(i%2)*.035),w*.017,h*.003,0,0,Math.PI*2);c.stroke();}
  // Stone paving and a path from the building to the patio.
  pill(c,w*.13,h*.32,w*.09,h*.20,10,'#aaa18a');
  c.strokeStyle='#5c64522b';c.lineWidth=1;
@@ -145,7 +149,7 @@ function cancelWalk(){walkPlan=null;}
 function startWalk(target,seat=null){
  const me=players[myId];if(!me||me.listener||!connected()||seatingPending)return;
  document.activeElement?.blur();resetMovementInput();
- const route=currentRoom!=='studio'?[StudioMovement.clamp(target.x,target.y)]:StudioMotion.route(StudioMotion.point(me),target);
+ const route=currentRoom==='garden'?Garden.route(Garden.point(me),target):currentRoom!=='studio'?[StudioMovement.clamp(target.x,target.y)]:StudioMotion.route(StudioMotion.point(me),target);
  if(!route.length){showToast('Escolha outro ponto no chão.');return;}
  walkPlan={route,seat};
 }
@@ -156,7 +160,7 @@ function walkToChair(seat){
 }
 function advanceWalk(me,dt){
  if(!walkPlan)return;
- const plan=walkPlan,next=StudioMotion.toward(StudioMotion.point(me),plan.route[0],dt),first=!me.moved;
+ const plan=walkPlan,next=StudioMotion.toward(currentRoom==='garden'?Garden.point(me):StudioMotion.point(me),plan.route[0],currentRoom==='garden'?dt/2:dt),first=!me.moved;
  Object.assign(me,{wx:next.x,wy:next.y,moved:true});movementDirty=true;if(first)updParts();
  if(next.arrived){plan.route.shift();if(!plan.route.length){walkPlan=null;
    wsSend({type:'move',space:'normalized',wx:me.wx,wy:me.wy});movementDirty=false;

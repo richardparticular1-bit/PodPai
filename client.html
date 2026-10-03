@@ -464,6 +464,7 @@ body.is-admin .admin-tools{display:flex}.pr{flex-wrap:wrap}.admin-tools{width:10
 
 <script src="/movement.js"></script>
 <script src="/studio-motion.js"></script>
+<script src="/garden.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
 //  PODPAI CAST
@@ -782,7 +783,7 @@ function playAudio(pid,stream){
     document.body.appendChild(el);
   }
   el.srcObject=stream;
-  el.muted=!!players[pid]?.adminMuted;
+  el.muted=currentRoom==='garden'||!!players[pid]?.adminMuted;
   recordingAttach(pid,stream);
   // Força play (iOS)
   el.play().then(()=>{audioStates[pid]='connected';}).catch(()=>{audioStates[pid]='blocked';});
@@ -793,11 +794,14 @@ function playAudio(pid,stream){
     const src=ac.createMediaStreamSource(stream);
     const an=ac.createAnalyser();an.fftSize=256;
     src.connect(an);
+    if(spatialAudio[pid]){spatialAudio[pid].src.disconnect();spatialAudio[pid].gain.disconnect();}
+    const gain=ac.createGain();gain.gain.value=0;src.connect(gain);gain.connect(ac.destination);spatialAudio[pid]={src,gain};
     analysers[pid]=an;
   }catch{}
 }
 
 function cleanPeer(pid){
+  if(spatialAudio[pid]){spatialAudio[pid].src.disconnect();spatialAudio[pid].gain.disconnect();delete spatialAudio[pid];}
   clearTimeout(audioRecoveryTimers[pid]);delete audioRecoveryTimers[pid];audioStates[pid]='closed';
   recordingDetach(pid);
   if(peers[pid]){const pc=peers[pid];delete peers[pid];pc.onconnectionstatechange=null;try{pc.close();}catch{}}
@@ -845,6 +849,7 @@ function updFsSpk(){
 let ws=null,wsUrl='';
 let myId=null,myName='',myAvatar=0,myColor='';
 let players={},running=false,intentionalExit=false,currentRoom='studio';
+const spatialAudio={};
 
 function connectWS(url){
   wsUrl=url;currentWsUrl=url;
@@ -876,6 +881,8 @@ function connectWS(url){
 function wsSend(d){if(ws&&ws.readyState===1)ws.send(JSON.stringify({...d,from:myId}));}
 
 async function onMsg(msg){
+  if(msg.type==='garden_state'){gardenObjects=msg.objects;gardenClockOffset=msg.time-Date.now();return;}
+  if(msg.type==='move'&&msg.from===myId&&currentRoom==='garden'){Object.assign(players[myId],{wx:msg.wx,wy:msg.wy,moved:true});return;}
   if(msg.type==='room_full'){
     localStream?.getTracks().forEach(t=>t.stop());isMuted=true;updMicUI();
     const notice=document.getElementById('recording-notice');notice.dataset.entryError='1';notice.classList.add('active');notice.textContent=msg.message+' ';
@@ -888,6 +895,7 @@ async function onMsg(msg){
   if(msg.type==='room_state'){
     Object.keys(peers).forEach(cleanPeer);
     currentRoom=msg.room||'studio';studioDirty=true;
+    CHAIRS.splice(0,8,...(currentRoom==='garden'?Garden.seats:STUDIO_CHAIRS).map(p=>[...p]));
     document.body.classList.toggle('backstage',currentRoom==='backstage');
     document.getElementById('cmsgs').replaceChildren();bubbles=[];effects=[];
     document.getElementById('exit-studio').textContent=currentRoom==='backstage'?'Ir ao estúdio':'Ir aos bastidores';
@@ -959,10 +967,11 @@ new ResizeObserver(resize).observe(canvas);
 document.fonts.ready.then(()=>{studioDirty=true;});
 
 const CHAIRS=[[.5,.36],[.31,.43],[.69,.43],[.33,.72],[.67,.72],[.5,.79],[.17,.60],[.83,.60]];
+const STUDIO_CHAIRS=CHAIRS.map(p=>[...p]);
 function getChair(pid){return players[pid]?.seat;}
 function ppos(p){
   const cp=CHAIRS[p.seat]||[.5,.5];
-  const pos=StudioMovement.clamp(p.moved?p.wx:cp[0],p.moved?p.wy:cp[1]);return{sx:CW*pos.x,sy:CH*pos.y};
+  const pos=StudioMovement.clamp(p.moved?p.wx:cp[0],p.moved?p.wy:cp[1]);const sway=typeof currentRoom!=='undefined'&&currentRoom==='garden'&&!p.moved&&p.seat===5?gardenSwing()*studioAvatarScale()*.65:0;return{sx:CW*pos.x+sway,sy:CH*pos.y};
 }
 function pill(c,x,y,w,h,r,fill,stroke){
   c.beginPath();c.roundRect(x,y,w,h,r);
@@ -1097,6 +1106,7 @@ function drawStudioDoor(at=.175,label=currentRoom==='backstage'?'ESTÚDIO':'BAST
 }
 function studioAvatarScale(){return Math.min(CW/(CW<580?520:700),CH/360,1.30);}
 function drawChairs(){
+  if(currentRoom==='garden'){drawGardenSeats();return;}
   const unit=studioAvatarScale()*.84*68/48;
   const occupied=new Set(Object.values(players).filter(p=>!p.listener&&!p.moved).map(p=>getChair(p.id)));
   CHAIRS.forEach((cp,i)=>{
@@ -1118,7 +1128,7 @@ function drawChairs(){
 }
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
-  const seated=!p.moved,s=studioAvatarScale()*(seated?.84:1);
+  const seated=!p.moved,s=studioAvatarScale()*(seated?.84:1)*(currentRoom==='garden'?.65:1);
   const talking=!!speaking[p.id];
   const state=avatarMotion.get(p.id),reaction=p.reactionUntil>animT?p.reaction:-1;
   const pose=StudioMotion.pose({time:animT,phase:state?.phase||0,walking:!!state?.walking,talking,seated,hand:!!p.handRaisedAt,reaction,reduced:reducedMotion.matches});
@@ -1127,7 +1137,8 @@ function drawPlayer(p,sx,sy,isMe){
   oval(ctx,0,5,22,7,'#05081177');
   if(isMe||talking){ctx.beginPath();ctx.ellipse(0,4,26+(talking&&!reducedMotion.matches?Math.sin(animT/150)*2:0),9,0,0,Math.PI*2);ctx.strokeStyle=talking?'#9af1d4':'#bd9affaa';ctx.lineWidth=1.8;ctx.stroke();}
   ctx.translate(0,bob);ctx.rotate(pose.lean);ctx.textAlign="center";
-  if(seated&&currentRoom==='backstage'&&p.seat===0){paintAvatar(ctx,p.avatar,p.color,true,pose);}
+  if(seated&&currentRoom==='garden'){paintAvatar(ctx,p.avatar,p.color,true,pose);}
+  else if(seated&&currentRoom==='backstage'&&p.seat===0){paintAvatar(ctx,p.avatar,p.color,true,pose);}
   else if(seated){
     // Draw the occupied armchair at avatar scale so the back and arms are never hidden.
     pill(ctx,-34,-61,68,62,13,'#584561','#bca1c477');
@@ -1190,7 +1201,7 @@ const avatarMotion=new Map();
 function updateAvatarMotion(ts){
   for(const id of avatarMotion.keys())if(!players[id])avatarMotion.delete(id);
   for(const p of Object.values(players)){
-    const pos=StudioMotion.point(p),old=avatarMotion.get(p.id),distance=old?Math.hypot((pos.x-old.x)*900,(pos.y-old.y)*620):0;
+    const pos=currentRoom==='garden'?Garden.point(p):StudioMotion.point(p),old=avatarMotion.get(p.id),distance=old?Math.hypot((pos.x-old.x)*900,(pos.y-old.y)*620):0;
     const lastMove=distance>.01?ts:old?.lastMove||0;
     avatarMotion.set(p.id,{...pos,phase:(old?.phase||0)+distance/14,lastMove,walking:p.moved&&ts-lastMove<140});
   }
@@ -1198,12 +1209,14 @@ function updateAvatarMotion(ts){
 function render(ts){
   if(!running)return;animT=ts;resize();updateAvatarMotion(ts);
   ctx.clearRect(0,0,CW,CH);
+  ctx.save();if(currentRoom==='garden'){updateGardenCamera();ctx.translate(-gardenCamera.x*CW*2,-gardenCamera.y*CH*2);ctx.scale(2,2);}
   drawRoom();drawChairs();
   if(typeof walkPlan!=='undefined'&&walkPlan?.route.length){const target=walkPlan.route[walkPlan.route.length-1];ctx.save();ctx.strokeStyle='#bca2ed';ctx.lineWidth=2;ctx.setLineDash([3,4]);ctx.beginPath();ctx.ellipse(target.x*CW,target.y*CH,12,5,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
   Object.values(players).filter(p=>!p.listener&&Number.isInteger(p.seat)).sort((a,b)=>ppos(a).sy-ppos(b).sy).forEach(p=>{
     const{sx,sy}=ppos(p);drawPlayer(p,sx,sy,p.id===myId);
   });
-  drawBubbles(ts);drawEffects(ts);recordingPaintFrame();
+  if(currentRoom==='garden')drawGardenLife();
+  drawBubbles(ts);drawEffects(ts);ctx.restore();recordingPaintFrame();
   requestAnimationFrame(render);
 }
 
@@ -1224,7 +1237,8 @@ function gameLoop(ts){
     const k=kd(),dx=jdx()+k.x,dy=jdy()+k.y;
     if((dx||dy)&&typeof cancelWalk==='function')cancelWalk();
     if(dx||dy){
-      const initial=CHAIRS[me.seat],pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt);
+      const initial=CHAIRS[me.seat];let pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,currentRoom==='garden'?dt/2:dt);
+      if(currentRoom==='garden')pos=Garden.safe(Garden.point(me),pos);
       const first=!me.moved;Object.assign(me,{wx:pos.x,wy:pos.y,moved:true});movementDirty=true;if(first)updParts();
     }else if(typeof advanceWalk==='function')advanceWalk(me,dt);
   }
@@ -1354,7 +1368,7 @@ function updParts(){
       <div class="prav">${p.listener?'👁️':`<img src="${AVS[AVATARS.indexOf(avatarSpec(p.avatar))]}" alt="">`}</div>
       <span class="prn ${p.id===myId?'me':''}">${esc(p.name)}${p.isAdmin?' 👑':(p.id===myId?' · você':'')}</span>
       <span class="prmic ${speaking[p.id]?'spk':'mut'}" id="mic-${p.id}">${p.listener?'👁️':(speaking[p.id]?'🎤':'🔇')}</span>
-      ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">${p.moved?'● Pelo estúdio':'● Poltrona '+String(p.seat+1).padStart(2,'0')+' ocupada'}</small>`:''}
+      ${!p.listener&&Number.isInteger(p.seat)?`<small class="seat-status">${p.moved?'● Explorando':currentRoom==='garden'?'● '+Garden.kinds[p.seat]+' '+String(p.seat+1).padStart(2,'0')+' ocupado':'● Poltrona '+String(p.seat+1).padStart(2,'0')+' ocupada'}</small>`:''}
       ${!p.listener?`<meter id="level-${p.id}" min="0" max="100" value="0" aria-label="Volume de ${esc(p.name)}"></meter>`:''}
       ${!p.listener?`<button type="button" class="audio-state" id="audio-state-${p.id}" data-audio-resume="${p.id}" aria-label="Estado do áudio de ${esc(p.name)}">Conectando áudio…</button>`:''}
       ${adminParticipantControls(p)}
@@ -1493,5 +1507,6 @@ if('serviceWorker' in navigator){
 <script src="/episodes.js"></script>
 <script src="/admin.js"></script>
 <script src="/experience.js"></script>
+<script src="/garden-view.js"></script>
 </body>
 </html>

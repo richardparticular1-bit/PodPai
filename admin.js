@@ -59,7 +59,8 @@ function handleAdminMessage(msg){
     if(msg.id===myId&&msg.adminMuted){
       isMuted=true;localStream?.getAudioTracks().forEach(t=>t.enabled=false);updMicUI();
     }
-    const audio=document.getElementById('aud-'+msg.id);if(audio)audio.muted=msg.adminMuted;
+    const audio=document.getElementById('aud-'+msg.id);if(audio)audio.muted=currentRoom==='garden'||msg.adminMuted;
+    if(msg.adminMuted&&spatialAudio[msg.id])spatialAudio[msg.id].gain.gain.value=0;
     const source=recordStreams.get(msg.id);if(source)source.gain.gain.value=msg.adminMuted?0:1;
     if(msg.adminMuted){speaking[msg.id]=false;updSpeaking(msg.id,false);}
     addChat(null,`${p?.name||'Participante'}: ${msg.adminMuted?'microfone bloqueado pelo administrador.':'microfone liberado; o participante pode ativá-lo.'}`,'sys');

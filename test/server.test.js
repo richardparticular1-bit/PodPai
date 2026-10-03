@@ -10,13 +10,13 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   t.after(()=>child.kill());
   const port=await new Promise((resolve,reject)=>{child.stdout.on('data',b=>{const m=String(b).match(/porta (\d+)/);if(m)resolve(m[1]);});child.on('error',reject);});
   const clients=[];t.after(()=>clients.forEach(c=>c.ws.terminate()));
-  async function connect(id,listener=false){
+  async function connect(id,listener=false,room='studio'){
     const ws=new WebSocket(`ws://localhost:${port}`),messages=[];
     ws.on('message',raw=>messages.push(JSON.parse(raw)));
     await once(ws,'open');
     const c={ws,messages,send:m=>ws.send(JSON.stringify(m)),async next(type){
       const until=Date.now()+3000;while(Date.now()<until){const i=messages.findIndex(m=>m.type===type);if(i>=0)return messages.splice(i,1)[0];await new Promise(r=>setTimeout(r,10));}throw new Error('Missing '+type);
-    }};clients.push(c);c.send({type:'join',id,name:id,listener,seat:7,isAdmin:true});return c;
+    }};clients.push(c);c.send({type:'join',id,name:id,listener,room,seat:7,isAdmin:true});return c;
   }
   const admin=await connect('admin'),first=await admin.next('room_state');
   assert.equal(first.self.seat,0);assert.equal(first.self.isAdmin,false);assert.equal(first.self.moved,true);assert.equal(first.self.wx,.175);assert.equal(first.self.wy,.35);
@@ -40,6 +40,29 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   admin.send({type:'move',space:'normalized',wx:.825,wy:.35});
   admin.send({type:'change_room',room:'garden'});
   const garden=await admin.next('room_state');assert.equal(garden.room,'garden');assert.equal(garden.self.id,'admin');assert.equal(garden.self.wx,.175);assert.equal(garden.players.length,0);
+  const g=require('../garden'),helper=await connect('garden-helper',false,'garden');await helper.next('room_state');
+  async function walk(client,id,start,end){let p=start;for(const waypoint of g.route(start,end)){while(g.distance(p,waypoint)>1){const d=g.distance(p,waypoint),f=Math.min(1,5/d);client.messages.length=0;client.send({type:'move',space:'normalized',wx:p.x+(waypoint.x-p.x)*f,wy:p.y+(waypoint.y-p.y)*f});let m;do{m=await client.next('move');}while(m.from!==id);p={x:m.wx,y:m.wy};}}return p;}
+  await walk(admin,'admin',{x:.175,y:.35},{x:.3,y:.52});
+  admin.send({type:'garden_object',action:'take',id:'ball'});await new Promise(r=>setTimeout(r,30));
+  await walk(helper,'garden-helper',{x:.175,y:.35},{x:.3,y:.52});
+  helper.send({type:'garden_object',action:'take',id:'ball'});await helper.next('admin_error');
+  admin.send({type:'garden_object',action:'drop'});await new Promise(r=>setTimeout(r,30));
+  helper.messages.length=0;helper.send({type:'garden_object',action:'take',id:'ball'});assert.deepEqual((await helper.next('garden_state')).objects[0].holders,['garden-helper']);
+  helper.ws.close();await new Promise(r=>setTimeout(r,30));
+  let cartPosition=await walk(admin,'admin',{x:.3,y:.52},{x:.77,y:.60});
+  admin.messages.length=0;admin.send({type:'garden_object',action:'take',id:'cart'});await admin.next('garden_state');
+  admin.messages.length=0;admin.send({type:'move',space:'normalized',wx:cartPosition.x+.003,wy:cartPosition.y});
+  assert.equal((await admin.next('move')).wx,cartPosition.x);
+  const coop=await connect('cooperator',false,'garden');await coop.next('room_state');
+  const helperPosition=await walk(coop,'cooperator',{x:.175,y:.35},{x:.78,y:.62});
+  coop.messages.length=0;coop.send({type:'garden_object',action:'take',id:'cart'});assert.equal((await coop.next('garden_state')).objects[2].holders.length,2);
+  admin.messages.length=0;coop.messages.length=0;admin.send({type:'move',space:'normalized',wx:cartPosition.x+.003,wy:cartPosition.y});
+  let own;do{own=await admin.next('move');}while(own.from!=='admin');assert.ok(own.wx>cartPosition.x);cartPosition={x:own.wx,y:own.wy};
+  let shared;do{shared=await coop.next('move');}while(shared.from!=='cooperator');assert.ok(shared.wx>helperPosition.x);
+  coop.ws.close();await new Promise(r=>setTimeout(r,30));
+  admin.messages.length=0;admin.send({type:'move',space:'normalized',wx:cartPosition.x+.003,wy:cartPosition.y});assert.equal((await admin.next('move')).wx,cartPosition.x);
+  admin.send({type:'garden_object',action:'drop'});await new Promise(r=>setTimeout(r,30));
+  await walk(admin,'admin',cartPosition,{x:.175,y:.35});
   admin.send({type:'change_room',room:'studio'});await admin.next('admin_error');
   admin.send({type:'recording_start'});await admin.next('admin_error');
   admin.send({type:'chat',text:'private garden'});admin.send({type:'offer',to:'guest',sdp:'private garden'});
