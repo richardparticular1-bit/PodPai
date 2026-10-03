@@ -66,6 +66,8 @@ Participantes chegam em pé junto à porta esquerda. Caminhe com os controles ou
 
 ### Movimento e presença
 
+A porta leva aos bastidores, com sofá, poltronas e iluminação própria. Aproxime-se dela e escolha **Ir aos bastidores** ou **Voltar ao estúdio**. Nome, avatar e estado do microfone permanecem; chat, participantes e conexões de áudio ficam separados por ambiente. Cada ambiente admite oito participantes. A gravação ocorre somente no estúdio, e quem está gravando deve finalizar os envios antes de trocar de sala.
+
 A chegada distribui os convidados em posições distintas perto da porta. Toque no piso para caminhar ao redor da mesa ou numa poltrona livre para caminhar até ela e sentar. Teclado e joystick interrompem o caminho automático.
 
 Braços e pernas acompanham os passos, com respiração em repouso e gestos ao falar, rir, aplaudir ou pedir a palavra. A preferência do aparelho por movimentos reduzidos é respeitada. Pedidos aparecem sobre o avatar e notificam o administrador. O estado do áudio aparece na lista de participantes; quando o navegador bloqueia a reprodução, toque no aviso para ouvir.

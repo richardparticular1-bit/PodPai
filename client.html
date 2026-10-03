@@ -844,7 +844,7 @@ function updFsSpk(){
 // ── WEBSOCKET ────────────────────────────────────────────────
 let ws=null,wsUrl='';
 let myId=null,myName='',myAvatar=0,myColor='';
-let players={},running=false,intentionalExit=false;
+let players={},running=false,intentionalExit=false,currentRoom='studio';
 
 function connectWS(url){
   wsUrl=url;currentWsUrl=url;
@@ -853,7 +853,7 @@ function connectWS(url){
   ws.onopen=()=>{
     document.getElementById('conn').textContent='● conectado';
     document.getElementById('conn').className='on';
-    wsSend({type:'join',id:myId,name:myName,avatar:myAvatar,color:myColor,wx:0,wy:0,listener:entryMode==='listen'});
+    wsSend({type:'join',room:currentRoom,id:myId,name:myName,avatar:myAvatar,color:myColor,wx:0,wy:0,listener:entryMode==='listen'});
   };
   ws.onmessage=async e=>{
     let m;try{m=JSON.parse(e.data);}catch{return;}
@@ -886,6 +886,12 @@ async function onMsg(msg){
   if(msg.from===myId)return;
 
   if(msg.type==='room_state'){
+    Object.keys(peers).forEach(cleanPeer);
+    currentRoom=msg.room||'studio';studioDirty=true;
+    document.body.classList.toggle('backstage',currentRoom==='backstage');
+    document.getElementById('cmsgs').replaceChildren();bubbles=[];effects=[];
+    document.getElementById('exit-studio').textContent=currentRoom==='backstage'?'Voltar ao estúdio':'Ir aos bastidores';
+    document.querySelector('.room-hint').textContent=currentRoom==='backstage'?'Bastidores · conversa reservada a este ambiente':'Mover: WASD, setas ou joystick · Reagir: 1–5';
     for(const id of Object.keys(players))if(id!==myId)delete players[id];
     if(msg.self)Object.assign(players[myId],msg.self);
     updateRecordingNotice(msg.recording||null);
@@ -970,6 +976,7 @@ function studioGlow(c,x,y,r,color){
   c.fillStyle=g;c.fillRect(x-r,y-r,r*2,r*2);
 }
 function paintStudio(c){
+  if(currentRoom==='backstage'){paintBackstage(c);return;}
   const W=CW,H=CH,wall=H*.30,unit=Math.min(W/900,H/620);
   const floor=c.createLinearGradient(0,wall,0,H);floor.addColorStop(0,'#272332');floor.addColorStop(1,'#161522');
   c.fillStyle=floor;c.fillRect(0,0,W,H);
@@ -1090,7 +1097,7 @@ function drawChairs(){
   const unit=studioAvatarScale()*.84*68/48;
   const occupied=new Set(Object.values(players).filter(p=>!p.listener&&!p.moved).map(p=>getChair(p.id)));
   CHAIRS.forEach((cp,i)=>{
-    if(occupied.has(i))return;
+    if(occupied.has(i)||(currentRoom==='backstage'&&i===0))return;
     const x=CW*cp[0],y=CH*cp[1],w=48*unit,h=48*unit;
     ctx.save();ctx.translate(x,y);
     oval(ctx,2,h*.22,w*.62,h*.19,'#05070c66');
@@ -1117,7 +1124,8 @@ function drawPlayer(p,sx,sy,isMe){
   oval(ctx,0,5,22,7,'#05081177');
   if(isMe||talking){ctx.beginPath();ctx.ellipse(0,4,26+(talking&&!reducedMotion.matches?Math.sin(animT/150)*2:0),9,0,0,Math.PI*2);ctx.strokeStyle=talking?'#9af1d4':'#bd9affaa';ctx.lineWidth=1.8;ctx.stroke();}
   ctx.translate(0,bob);ctx.rotate(pose.lean);ctx.textAlign="center";
-  if(seated){
+  if(seated&&currentRoom==='backstage'&&p.seat===0){paintAvatar(ctx,p.avatar,p.color,true,pose);}
+  else if(seated){
     // Draw the occupied armchair at avatar scale so the back and arms are never hidden.
     pill(ctx,-34,-61,68,62,13,'#584561','#bca1c477');
     pill(ctx,-28,-55,56,41,10,'#6b5275','#c9afcf44');

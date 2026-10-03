@@ -27,6 +27,19 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   b.send({type:'recording_start'});await b.next('admin_error');
   admin.send({type:'admin_login',password:'wrong'});await admin.next('admin_error');
   admin.send({type:'admin_login',password});await admin.next('admin_authenticated');
+  // A room transition preserves identity and isolates chat and WebRTC signaling.
+  admin.send({type:'change_room',room:'backstage'});await admin.next('admin_error');
+  admin.send({type:'move',space:'normalized',wx:.175,wy:.35});
+  admin.send({type:'change_room',room:'backstage'});
+  const backstage=await admin.next('room_state');assert.equal(backstage.room,'backstage');assert.equal(backstage.self.name,'admin');assert.equal(backstage.self.isAdmin,true);assert.equal(backstage.players.length,0);
+  await b.next('leave');b.messages.length=0;
+  admin.send({type:'chat',text:'private backstage'});admin.send({type:'offer',to:'guest',sdp:'private'});
+  await new Promise(r=>setTimeout(r,60));assert.equal(b.messages.some(m=>m.type==='chat'||m.type==='offer'),false);
+  admin.send({type:'recording_start'});await admin.next('admin_error');
+  admin.send({type:'change_room',room:'studio'});
+  const returned=await admin.next('room_state');assert.equal(returned.room,'studio');assert.equal(returned.self.id,'admin');assert.equal(returned.players[0].id,'guest');
+  admin.send({type:'sit',seat:0});await admin.next('seat_state');
+  await b.next('seat_state');
   admin.send({type:'admin_action',action:'mute',target:'guest'});assert.equal((await b.next('participant_moderation')).adminMuted,true);
   admin.send({type:'admin_action',action:'unmute',target:'guest'});assert.equal((await b.next('participant_moderation')).adminMuted,false);
   b.send({type:'move',wx:99999,wy:-5000});

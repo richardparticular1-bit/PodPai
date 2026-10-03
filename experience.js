@@ -60,20 +60,44 @@ const titleField=document.createElement('label');titleField.textContent='Título
 const originalMicUI=updMicUI;updMicUI=function(){originalMicUI();document.getElementById('mobile-mic').textContent=isMuted?'🔇 Ativar mic':'🎤 Silenciar mic';};updMicUI();
 
 // The door never disconnects someone merely for walking past it.
-const exitButton=document.createElement('button');exitButton.id='exit-studio';exitButton.type='button';exitButton.textContent='Sair do podcast';exitButton.onclick=exitThroughDoor;dock.append(exitButton);
+const exitButton=document.createElement('button');exitButton.id='exit-studio';exitButton.type='button';exitButton.textContent='Ir aos bastidores';exitButton.onclick=exitThroughDoor;dock.append(exitButton);
 function nearDoor(){const p=players[myId];return !!p&&(p.listener||(p.moved&&Math.abs(p.wx-.175)<.08&&Math.abs(p.wy-.35)<.08));}
 function exitThroughDoor(){
  if(!running)return;
  if(!nearDoor()){showToast('Caminhe até a porta à esquerda para sair.');return;}
  if(recorder||recordPending||recordStarting||pendingUploads||unsavedParts){showToast('Finalize a gravação e conclua os envios antes de sair.');if(!document.getElementById('admin-dialog').open)document.getElementById('admin-dialog').showModal();return;}
-  intentionalExit=true;running=false;localStream?.getTracks().forEach(t=>t.stop());Object.keys(peers).forEach(cleanPeer);ws?.close(1000,'Left studio');wakeLock?.release();showSurpriseRoom();
+  resetMovementInput();wsSend({type:'change_room',room:currentRoom==='backstage'?'studio':'backstage'});
 }
-function showSurpriseRoom(){
- const scene=document.createElement('main');scene.id='surprise-room';scene.innerHTML='<div class="surprise-stars">✦　·　✧　·　✦</div><div class="surprise-sign">BASTIDORES</div><h1>Você encontrou a sala secreta!</h1><p>O episódio continua nos bastidores do PodPai.</p><div class="surprise-lounge"><div class="surprise-lamp">◒</div><div class="surprise-sofa">▰ ▰ ▰</div><div class="surprise-table">☕　💧　🎧</div></div><button id="return-studio" type="button">Voltar ao estúdio</button>';
- document.body.append(scene);document.getElementById('return-studio').onclick=()=>location.reload();
+function paintBackstage(c){
+ const w=CW,h=CH;
+ const wall=c.createLinearGradient(0,0,0,h);wall.addColorStop(0,'#35243e');wall.addColorStop(.34,'#604054');wall.addColorStop(1,'#211c30');c.fillStyle=wall;c.fillRect(0,0,w,h);
+ c.fillStyle='#221b2a';c.fillRect(0,h*.30,w,h*.70);
+ for(let i=0;i<15;i++){c.strokeStyle='#baa08415';c.beginPath();c.moveTo(w*.5+(i-7)*w*.025,h*.30);c.lineTo((i-3)*w*.14,h);c.stroke();}
+ pill(c,w*.34,h*.055,w*.35,h*.16,12,'#221c30','#c89b7155');
+ c.textAlign='center';c.fillStyle='#f1d5aa';c.font=`800 ${Math.max(15,w*.034)}px Nunito,sans-serif`;c.fillText('BASTIDORES',w*.515,h*.13,w*.31);
+ c.font=`600 ${Math.max(9,w*.012)}px Nunito,sans-serif`;c.fillStyle='#d2b9c7';c.fillText('Uma pausa entre boas conversas',w*.515,h*.185,w*.30);
+ oval(c,w*.51,h*.65,w*.39,h*.23,'#181522');oval(c,w*.51,h*.63,w*.38,h*.22,'#564352');
+ c.strokeStyle='#bc927d55';c.lineWidth=2;c.beginPath();c.ellipse(w*.51,h*.63,w*.36,h*.20,0,0,Math.PI*2);c.stroke();
+ // Upholstered three-seat couch, with a back, cushions, arms and feet.
+ const x=w*.35,y=h*.28,sw=w*.33,sh=h*.12;
+ pill(c,x+sw*.06,y+sh,sw*.05,h*.025,2,'#b38967');pill(c,x+sw*.89,y+sh,sw*.05,h*.025,2,'#b38967');
+ pill(c,x,y,sw,sh,12,'#8c657b','#bd92a277');
+ for(let i=0;i<3;i++){pill(c,x+sw*(.065+i*.29),y+sh*.1,sw*.27,sh*.58,8,'#a77a8f','#d3a0ac55');pill(c,x+sw*(.065+i*.29),y+sh*.70,sw*.27,sh*.28,5,'#75566d');}
+ pill(c,x-sw*.035,y+sh*.35,sw*.09,sh*.68,7,'#63485e');pill(c,x+sw*.945,y+sh*.35,sw*.09,sh*.68,7,'#63485e');
+ // Warm floor lamp and framed art make the lounge distinct from the studio.
+ const lx=w*.85;studioGlow(c,lx,h*.24,w*.14,'#efba5933');
+ pill(c,lx-2,h*.18,4,h*.25,2,'#b49779');oval(c,lx,h*.44,w*.035,h*.012,'#100f19');
+ c.fillStyle='#edcca0';c.beginPath();c.moveTo(lx-w*.026,h*.12);c.lineTo(lx+w*.026,h*.12);c.lineTo(lx+w*.045,h*.22);c.lineTo(lx-w*.045,h*.22);c.closePath();c.fill();
+ pill(c,w*.74,h*.065,w*.055,h*.14,4,'#201c2b','#bd9a76');oval(c,w*.767,h*.12,w*.016,h*.027,'#bc8c6c');
+ drawBackstageShelf(c,w,h);
+}
+function drawBackstageShelf(c,w,h){
+ pill(c,w*.04,h*.09,w*.055,h*.19,4,'#211d2c','#9b7c67');
+ for(let i=0;i<5;i++)pill(c,w*(.045+i*.009),h*(.13+(i%2)*.015),w*.006,h*.075,1,['#c99a73','#92769f','#6d9d91'][i%3]);
+ pill(c,w*.042,h*.21,w*.05,3,1,'#b29276');
 }
 style.textContent+=`#surprise-room{position:fixed;inset:0;z-index:50;display:grid;place-items:center;align-content:center;gap:14px;text-align:center;color:#f3e8ff;background:radial-gradient(circle at 50% 30%,#49306d,#140d22 58%,#080611);overflow:hidden}#surprise-room h1{font-size:clamp(24px,5vw,54px);margin:0;text-shadow:0 0 22px #c78cff}#surprise-room p{font-size:clamp(14px,2vw,21px);color:#c9b6dd;margin:0}.surprise-stars{position:absolute;top:12%;font-size:28px;color:#d8b5ff;letter-spacing:10px}.surprise-sign{padding:9px 22px;border:1px solid #d3a6ff88;border-radius:999px;color:#e1b8ff;letter-spacing:6px;font-weight:800}.surprise-lounge{width:min(640px,82vw);height:150px;position:relative;border-bottom:8px solid #8a5bb0;border-radius:50%;background:linear-gradient(#21172f,#171124);box-shadow:0 18px 40px #0008}.surprise-lamp{position:absolute;left:12%;top:12px;font-size:58px;color:#ffd58f}.surprise-sofa{position:absolute;left:34%;top:62px;font-size:52px;letter-spacing:7px;color:#956db8;filter:drop-shadow(0 10px 8px #000)}.surprise-table{position:absolute;right:8%;top:80px;padding:17px 15px;border-radius:50%;background:#9c6d54;color:#ffe2bd;box-shadow:0 10px 0 #4c2f3a;font-size:22px}#return-studio{background:#9b6bd5;color:white;border:0;border-radius:12px;padding:13px 24px;font:700 16px Nunito,sans-serif;cursor:pointer;box-shadow:0 7px 0 #593d83}#return-studio:active{transform:translateY(3px);box-shadow:0 4px 0 #593d83}`;
-setInterval(()=>{exitButton.disabled=!running;exitButton.title=nearDoor()?'Desligar o microfone e voltar à entrada':'Caminhe até a porta à esquerda';exitButton.classList.toggle('at-door',nearDoor());},250);
+setInterval(()=>{exitButton.disabled=!running;exitButton.title=nearDoor()?'Atravessar a porta':'Caminhe até a porta à esquerda';exitButton.classList.toggle('at-door',nearDoor());},250);
 style.textContent+=`
 #studio-controls{min-height:60px;gap:8px;flex-wrap:wrap}#studio-controls #jzone{width:56px;height:56px;flex-basis:56px}#jbase{width:56px;height:56px}#jknob{width:28px;height:28px}#studio-controls button,#studio-controls select{padding:7px 10px;min-height:36px;font-size:12px}.movement-controls{gap:5px}#exit-studio{margin-left:auto}#exit-studio.at-door{border-color:#9edcc2;background:#234238}#bottom{gap:12px}#bottom .rb{min-height:34px;padding:6px 10px}#bottom #erow{width:120px}#shell{gap:8px}#pwrap{padding:10px 14px;max-height:25%;min-height:72px}#ptitle{margin-bottom:5px}#lcount{margin-top:4px}#ewrap{padding:6px 12px}#etitle{display:none}#ecard{padding:7px 9px}#eicon{font-size:18px;margin:0}#ctbar{padding:9px 12px}#cmsgs{padding:10px 14px;gap:8px;flex:1;min-height:100px}#cinrow{padding:8px}#cwrap{min-height:190px}#rpanel{overflow:hidden}.pr{padding:3px 0}.room-hint{bottom:12px;font-size:10px}
 @media(max-width:760px){#studio-controls{grid-template-columns:56px 1fr;min-height:0;gap:4px}#studio-controls #jzone{height:56px;grid-row:1/3}#studio-controls button{min-height:36px;padding:6px;font-size:11px}#raise-button{grid-column:2}#exit-studio{grid-column:2;margin:0;grid-row:3;justify-self:end;width:104px;z-index:1}.mobile-actions{grid-row:3;padding-right:108px}#cwrap{min-height:160px}#pwrap{max-height:24%}body.listener #studio-controls{display:flex}body.listener #studio-controls>*:not(#exit-studio){display:none}}
@@ -90,7 +114,7 @@ function cancelWalk(){walkPlan=null;}
 function startWalk(target,seat=null){
  const me=players[myId];if(!me||me.listener||!connected()||seatingPending)return;
  document.activeElement?.blur();resetMovementInput();
- const route=StudioMotion.route(StudioMotion.point(me),target);
+ const route=currentRoom==='backstage'?[StudioMovement.clamp(target.x,target.y)]:StudioMotion.route(StudioMotion.point(me),target);
  if(!route.length){showToast('Escolha outro ponto no chão.');return;}
  walkPlan={route,seat};
 }
