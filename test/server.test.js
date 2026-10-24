@@ -40,6 +40,10 @@ test('authoritative seating, moderator permissions, removal and recording lifecy
   admin.send({type:'move',space:'normalized',wx:.825,wy:.35});
   admin.send({type:'change_room',room:'garden'});
   const garden=await admin.next('room_state');assert.equal(garden.room,'garden');assert.equal(garden.self.id,'admin');assert.equal(garden.self.wx,.175);assert.equal(garden.players.length,0);
+  // A delayed/batched position must not be shortened based on packet arrival time.
+  admin.send({type:'move',space:'normalized',wx:.3,wy:.35});
+  const uninterrupted=await admin.next('move');assert.equal(uninterrupted.wx,.3);assert.equal(uninterrupted.accepted,true);
+  admin.send({type:'move',space:'normalized',wx:.175,wy:.35});assert.equal((await admin.next('move')).wx,.175);
   const g=require('../garden'),helper=await connect('garden-helper',false,'garden');await helper.next('room_state');
   async function walk(client,id,start,end){let p=start;for(const waypoint of g.route(start,end)){while(g.distance(p,waypoint)>1){const d=g.distance(p,waypoint),f=Math.min(1,5/d);client.messages.length=0;client.send({type:'move',space:'normalized',wx:p.x+(waypoint.x-p.x)*f,wy:p.y+(waypoint.y-p.y)*f});let m;do{m=await client.next('move');}while(m.from!==id);p={x:m.wx,y:m.wy};}}return p;}
   await walk(admin,'admin',{x:.175,y:.35},{x:.3,y:.52});

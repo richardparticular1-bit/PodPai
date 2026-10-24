@@ -973,7 +973,7 @@ const STUDIO_CHAIRS=CHAIRS.map(p=>[...p]);
 function getChair(pid){return players[pid]?.seat;}
 function ppos(p){
   const cp=CHAIRS[p.seat]||[.5,.5];
-  const pos=StudioMovement.clamp(p.moved?p.wx:cp[0],p.moved?p.wy:cp[1]);const sway=typeof currentRoom!=='undefined'&&currentRoom==='garden'&&!p.moved&&p.seat===5?gardenSwing()*studioAvatarScale()*.65:0;return{sx:CW*pos.x+sway,sy:CH*pos.y};
+  const pos=StudioMovement.clamp(p.moved?p.wx:cp[0],p.moved?p.wy:cp[1]);const sway=typeof currentRoom!=='undefined'&&currentRoom==='garden'&&!p.moved&&p.seat===5?gardenSwing()*studioAvatarScale():0;return{sx:CW*pos.x+sway,sy:CH*pos.y};
 }
 function pill(c,x,y,w,h,r,fill,stroke){
   c.beginPath();c.roundRect(x,y,w,h,r);
@@ -1130,7 +1130,7 @@ function drawChairs(){
 }
 function drawPlayer(p,sx,sy,isMe){
   if(p.listener)return;
-  const seated=!p.moved,s=studioAvatarScale()*(seated?.84:1)*(currentRoom==='garden'?.65:1);
+  const seated=!p.moved,s=studioAvatarScale()*(seated?.84:1);
   const talking=!!speaking[p.id];
   const state=avatarMotion.get(p.id),reaction=p.reactionUntil>animT?p.reaction:-1;
   const pose=StudioMotion.pose({time:animT,phase:state?.phase||0,walking:!!state?.walking,talking,seated,hand:!!p.handRaisedAt,reaction,reduced:reducedMotion.matches});
@@ -1211,7 +1211,7 @@ function updateAvatarMotion(ts){
 function render(ts){
   if(!running)return;animT=ts;resize();updateAvatarMotion(ts);
   ctx.clearRect(0,0,CW,CH);
-  ctx.save();if(currentRoom==='garden'){updateGardenCamera();ctx.translate(-gardenCamera.x*CW*2,-gardenCamera.y*CH*2);ctx.scale(2,2);}
+  ctx.save();
   drawRoom();drawChairs();
   if(typeof walkPlan!=='undefined'&&walkPlan?.route.length){const target=walkPlan.route[walkPlan.route.length-1];ctx.save();ctx.strokeStyle='#bca2ed';ctx.lineWidth=2;ctx.setLineDash([3,4]);ctx.beginPath();ctx.ellipse(target.x*CW,target.y*CH,12,5,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
   Object.values(players).filter(p=>!p.listener&&Number.isInteger(p.seat)).sort((a,b)=>ppos(a).sy-ppos(b).sy).forEach(p=>{
@@ -1239,7 +1239,7 @@ function gameLoop(ts){
     const k=kd(),dx=jdx()+k.x,dy=jdy()+k.y;
     if((dx||dy)&&typeof cancelWalk==='function')cancelWalk();
     if(dx||dy){
-      const initial=CHAIRS[me.seat];let pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,currentRoom==='garden'?dt/2:dt);
+      const initial=CHAIRS[me.seat];let pos=StudioMovement.step(me.moved?me.wx:initial[0],me.moved?me.wy:initial[1],dx,dy,dt);
       if(currentRoom==='garden')pos=Garden.safe(Garden.point(me),pos);
       const first=!me.moved;Object.assign(me,{wx:pos.x,wy:pos.y,moved:true});movementDirty=true;if(first)updParts();
     }else if(typeof advanceWalk==='function')advanceWalk(me,dt);

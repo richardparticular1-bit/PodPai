@@ -12,7 +12,6 @@ document.getElementById('raise-button').onclick=()=>wsSend({type:'hand_raise',ra
 canvas.addEventListener('click',e=>{
   if(!running||players[myId]?.listener)return;
   const r=canvas.getBoundingClientRect();let x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
-  if(currentRoom==='garden'){x=x/2+gardenCamera.x;y=y/2+gardenCamera.y;}
   if(x>.115&&x<.235&&y>.07&&y<.32){exitThroughDoor();return;}
   if(currentRoom==='backstage'&&x>.765&&x<.885&&y>.07&&y<.32){exitThroughDoor('garden');return;}
   const seat=CHAIRS.findIndex(([cx,cy])=>Math.abs(x-cx)<.04&&Math.abs(y-cy)<.055);
@@ -160,7 +159,7 @@ function walkToChair(seat){
 }
 function advanceWalk(me,dt){
  if(!walkPlan)return;
- const plan=walkPlan,next=StudioMotion.toward(currentRoom==='garden'?Garden.point(me):StudioMotion.point(me),plan.route[0],currentRoom==='garden'?dt/2:dt),first=!me.moved;
+ const plan=walkPlan,next=StudioMotion.toward(currentRoom==='garden'?Garden.point(me):StudioMotion.point(me),plan.route[0],dt),first=!me.moved;
  Object.assign(me,{wx:next.x,wy:next.y,moved:true});movementDirty=true;if(first)updParts();
  if(next.arrived){plan.route.shift();if(!plan.route.length){walkPlan=null;
    wsSend({type:'move',space:'normalized',wx:me.wx,wy:me.wy});movementDirty=false;

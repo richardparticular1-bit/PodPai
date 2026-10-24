@@ -1,9 +1,7 @@
 let gardenObjects=[],gardenClockOffset=0;
-const gardenCamera={x:0,y:0};
 function gardenSwing(){return !reducedMotion.matches&&Object.values(players).some(p=>!p.listener&&!p.moved&&p.seat===5)?Math.sin((Date.now()+gardenClockOffset)/800)*7:0;}
-function updateGardenCamera(){const me=players[myId];const p=me?Garden.point(me):{x:.175,y:.35};gardenCamera.x=Math.max(0,Math.min(.5,p.x-.25));gardenCamera.y=Math.max(0,Math.min(.5,p.y-.25));}
 function drawGardenSeats(){
- const s=studioAvatarScale()*.65;
+ const s=studioAvatarScale();
  Garden.seats.forEach(([x,y],i)=>{
   ctx.save();ctx.translate(x*CW,y*CH);ctx.scale(s,s);oval(ctx,0,6,30,8,'#142a2744');
   const kind=Garden.kinds[i];

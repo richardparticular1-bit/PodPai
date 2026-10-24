@@ -228,8 +228,6 @@ wss.on('connection', (ws,req) => {
       if(c.room==='garden'){
         const from=garden.point(c),held=gardenObjects.find(o=>o.holders.includes(myId));
         let target=garden.safe(from,position);
-        const maxStep=145*Math.min(.25,Math.max(.065,(Date.now()-(c.lastGardenMove||Date.now()))/1000));
-        const d=garden.distance(from,target);if(d>maxStep){const f=maxStep/d;target={x:from.x+(target.x-from.x)*f,y:from.y+(target.y-from.y)*f};}
         if(held?.required>1){
           if(held.holders.length<held.required)target=from;
           const dx=target.x-from.x,dy=target.y-from.y;
@@ -237,7 +235,7 @@ wss.on('connection', (ws,req) => {
           if(!garden.clear(held,{x:held.x+dx,y:held.y+dy})||members.some(([,p])=>!p||garden.distance(garden.point(p),held)>160||!garden.clear(garden.point(p),{x:p.wx+dx,y:p.wy+dy})||p.wx+dx<.1||p.wx+dx>.9||p.wy+dy<.32||p.wy+dy>.84))target=from;
           else if(target!==from){held.x+=dx;held.y+=dy;for(const [id,p] of members)if(id!==myId){p.wx+=dx;p.wy+=dy;broadcast({type:'move',from:id,wx:p.wx,wy:p.wy,moved:true,space:'normalized'},null,'garden');}}
         }else if(held){held.x=target.x;held.y=target.y;}
-        Object.assign(c,{wx:target.x,wy:target.y,moved:true,lastGardenMove:Date.now()});
+        Object.assign(c,{wx:target.x,wy:target.y,moved:true});
         const accepted=Math.abs(c.wx-msg.wx)<1e-9&&Math.abs(c.wy-msg.wy)<1e-9;
         broadcast({type:'move',from:myId,wx:c.wx,wy:c.wy,moved:true,space:'normalized',accepted},null,'garden');if(held)gardenState();return;
       }
