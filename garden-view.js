@@ -54,3 +54,35 @@ setInterval(()=>{
  const close=!me.listener&&gardenObjects.filter(o=>o.holders.length<o.required&&Garden.distance(Garden.point(me),o)<=110)[0];
  button.disabled=me.listener||(!held&&!close);button.textContent=held?'Soltar '+held.name+(held.required>held.holders.length?' · aguardando ajuda':''):close?'Pegar '+close.name:'Aproxime-se de um brinquedo';
 },200);
+
+// Keep the room visible: secondary controls live in one explicitly opened panel.
+const actionsDialog=document.createElement('dialog');actionsDialog.id='room-actions';
+actionsDialog.innerHTML='<header><h2>Ações da sala</h2><button type="button" id="close-actions" aria-label="Fechar ações">✕</button></header><p>Toque no chão para caminhar ou em um assento para sentar.</p><h3>Seu lugar</h3><div id="place-actions"></div><h3>Explorar</h3><div id="travel-actions"></div><h3>Reações</h3>';
+document.body.append(actionsDialog);
+const placeActions=actionsDialog.querySelector('#place-actions');
+placeActions.append(dock.querySelector('.movement-controls'),document.getElementById('raise-button'));
+actionsDialog.querySelector('#travel-actions').append(exitButton,gardenButton,gardenTools);
+actionsDialog.append(document.getElementById('bottom'));
+const actionsButton=document.createElement('button');actionsButton.type='button';actionsButton.id='open-actions';actionsButton.textContent='☰ Ações';actionsButton.setAttribute('aria-haspopup','dialog');dock.append(actionsButton);
+actionsButton.onclick=()=>{refreshExperience();actionsDialog.showModal();};
+document.getElementById('close-actions').onclick=()=>actionsDialog.close();
+actionsDialog.addEventListener('click',e=>{if(e.target===actionsDialog)actionsDialog.close();});
+for(const id of ['stand-button','sit-button','raise-button','exit-studio','exit-garden','garden-pick','garden-return'])document.getElementById(id).addEventListener('click',()=>actionsDialog.close());
+const refreshBeforeClarity=refreshExperience;
+refreshExperience=function(){refreshBeforeClarity();const me=players[myId];document.getElementById('stand-button').hidden=!me||me.listener||me.moved;document.getElementById('raise-button').hidden=currentRoom!=='studio'||!!me?.listener;placeActions.hidden=!!me?.listener;};
+for(const card of document.querySelectorAll('#rbar .rb')){card.setAttribute('role','button');card.tabIndex=0;card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();card.click();}});card.addEventListener('click',()=>actionsDialog.close());}
+style.textContent+=`
+#studio-controls,body.listener #studio-controls{display:flex;flex-wrap:nowrap;gap:8px;min-height:60px}
+#studio-controls .mobile-actions{display:flex;flex:1;padding:0;gap:8px}#studio-controls .mobile-actions button{flex:1;min-height:44px}
+#studio-controls #open-actions{min-height:44px}#topbar #btn-mic,#topbar #btn-panel{display:none}
+body.listener #studio-controls .mobile-actions,body.listener #studio-controls #open-actions{display:flex}
+body.listener #studio-controls #mobile-mic{display:none}
+#room-actions{box-sizing:border-box;width:min(480px,calc(100vw - 24px));max-height:80dvh;padding:20px;border:1px solid #675078;border-radius:20px;background:#1d172a;color:#f1e8ff;overflow:auto}
+#room-actions::backdrop{background:#080611aa}#room-actions header{display:flex;align-items:center;justify-content:space-between;gap:12px}#room-actions h2{font-size:20px;margin:0}#room-actions h3{font-size:13px;color:#c7addd;margin:20px 0 10px}#room-actions p{font-size:13px;color:#cbbfd9;line-height:1.5}
+#room-actions button,#room-actions select{font:inherit;font-size:14px;min-height:44px;padding:8px 12px;border:1px solid #675078;border-radius:10px;background:#30233f;color:#f1e8ff}#room-actions button:disabled{opacity:.45}
+#room-actions [hidden]{display:none!important}#place-actions,#travel-actions{display:flex;gap:8px;flex-wrap:wrap}#room-actions .movement-controls{flex:1;min-width:0}#room-actions select{flex:1;min-width:0;max-width:none}#room-actions #exit-studio{margin:0;width:auto}
+#room-actions #garden-tools{width:100%;display:flex;flex-wrap:wrap}#room-actions #garden-hearing{flex-basis:100%;line-height:1.5}#room-actions #bottom{display:flex;flex-direction:column;align-items:stretch;padding:0}#room-actions #erow{display:flex;width:auto}#room-actions #rbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;width:100%}#room-actions .rb{min-width:0;min-height:48px;flex-direction:column;padding:6px 2px}#room-actions .rb span{font-size:10px}
+@media(max-width:760px){#studio-controls{gap:6px}#studio-controls .mobile-actions{gap:6px}#studio-controls button{font-size:12px}#studio-controls #jzone{flex:0 0 56px}#room-actions{padding:16px}}
+`;
+refreshExperience();
+style.textContent+='#room-actions{margin:auto}#room-actions button:focus-visible,#room-actions .rb:focus-visible,#open-actions:focus-visible{outline:2px solid #d4b5ff;outline-offset:3px}';
